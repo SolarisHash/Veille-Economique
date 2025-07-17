@@ -57,7 +57,7 @@ class GenerateurRapports:
         return str(chemin_fichier)
         
     def _creer_dataframe_principal(self, entreprises: List[Dict]) -> pd.DataFrame:
-        """Création du DataFrame principal avec toutes les données"""
+        """Création du DataFrame principal avec toutes les données et détails complets"""
         donnees = []
         
         for entreprise in entreprises:
@@ -78,38 +78,107 @@ class GenerateurRapports:
                 'Date_Analyse': entreprise.get('date_analyse', ''),
             }
             
-            # ✅ AJOUT : Résumé textuel global
+            # ✅ EXTRACTION DÉTAILLÉE DES INFORMATIONS
             tous_extraits = []
+            tous_liens = []
+            resume_par_thematique = {}
+            
             analyse = entreprise.get('analyse_thematique', {})
             
             for thematique in self.thematiques:
                 if thematique in analyse and analyse[thematique].get('trouve', False):
                     result = analyse[thematique]
                     
-                    # Extraction des informations textuelles pour le résumé
+                    # Informations détaillées par thématique
+                    infos_thematique = []
+                    liens_thematique = []
+                    
                     for detail in result.get('details', []):
                         info = detail.get('informations', {})
+                        
+                        # Extraits textuels des recherches web
                         if 'extraits_textuels' in info:
                             for extrait in info['extraits_textuels']:
-                                tous_extraits.append(f"{thematique}: {extrait['description']}")
+                                titre = extrait.get('titre', '')
+                                description = extrait.get('description', '')
+                                url = extrait.get('url', '')
+                                
+                                if titre and description:
+                                    info_complete = f"{titre}: {description}"
+                                    infos_thematique.append(info_complete)
+                                    tous_extraits.append(f"[{thematique}] {info_complete}")
+                                    
+                                    if url:
+                                        liens_thematique.append(url)
+                                        tous_liens.append(url)
+                        
+                        # Extraits contextuels du site officiel
+                        if 'extraits_contextuels' in info:
+                            for extrait in info['extraits_contextuels']:
+                                contexte = extrait.get('contexte', '')
+                                mot_cle = extrait.get('mot_cle', '')
+                                
+                                if contexte:
+                                    info_complete = f"[{mot_cle}] {contexte}"
+                                    infos_thematique.append(info_complete)
+                                    tous_extraits.append(f"[{thematique}] {info_complete}")
+                        
+                        # Résumé de contenu du site officiel
+                        if 'resume_contenu' in info:
+                            resume = info['resume_contenu'][:200] + '...' if len(info['resume_contenu']) > 200 else info['resume_contenu']
+                            infos_thematique.append(f"Résumé site: {resume}")
+                            tous_extraits.append(f"[{thematique}] {resume}")
+                        
+                        # URL du site officiel
+                        if 'url' in info and info['url']:
+                            liens_thematique.append(info['url'])
+                            tous_liens.append(info['url'])
                     
+                    # Résumé pour cette thématique
+                    resume_par_thematique[thematique] = ' | '.join(infos_thematique[:2])  # Top 2 infos
+                    
+                    # Colonnes par thématique
                     ligne[f'{thematique}_Trouvé'] = 'Oui'
                     ligne[f'{thematique}_Score'] = round(result['score_pertinence'], 2)
                     ligne[f'{thematique}_Confiance'] = result.get('niveau_confiance', 'N/A')
                     ligne[f'{thematique}_Sources'] = ', '.join(result.get('sources', []))
+                    ligne[f'{thematique}_Détails'] = resume_par_thematique[thematique]  # ✅ NOUVEAUTÉ
+                    ligne[f'{thematique}_Liens'] = ' | '.join(list(set(liens_thematique))[:2])  # ✅ NOUVEAUTÉ
                 else:
                     ligne[f'{thematique}_Trouvé'] = 'Non'
                     ligne[f'{thematique}_Score'] = 0.0
                     ligne[f'{thematique}_Confiance'] = 'N/A'
                     ligne[f'{thematique}_Sources'] = ''
+                    ligne[f'{thematique}_Détails'] = ''
+                    ligne[f'{thematique}_Liens'] = ''
             
-            # ✅ AJOUT : Résumé textuel global
-            ligne['Resume_Informations'] = ' | '.join(tous_extraits[:3])
-            ligne['Nombre_Total_Mentions'] = len(tous_extraits)
+            # ✅ COLONNES GLOBALES AVEC DÉTAILS
+            liens_uniques = list(set([lien for lien in tous_liens if lien and lien.startswith('http')]))
+            
+            ligne['Résumé_Complet'] = ' | '.join(tous_extraits[:5])  # Top 5 informations
+            ligne['Nombre_Total_Informations'] = len(tous_extraits)
+            ligne['Liens_Sources_Principaux'] = ' | '.join(liens_uniques[:3])  # Top 3 liens
+            ligne['Nombre_Sources_Uniques'] = len(liens_uniques)
+            ligne['Première_Source'] = liens_uniques[0] if liens_uniques else ''
+            ligne['Activité_Principale'] = self._determiner_activite_principale(resume_par_thematique)
             
             donnees.append(ligne)
             
         return pd.DataFrame(donnees)
+    
+    def _determiner_activite_principale(self, resume_par_thematique: Dict[str, str]) -> str:
+        """Détermine l'activité principale basée sur les résumés"""
+        if not resume_par_thematique:
+            return "Aucune activité détectée"
+        
+        # Trouve la thématique avec le plus d'informations
+        thematique_principale = max(resume_par_thematique.items(), key=lambda x: len(x[1]))
+        
+        if thematique_principale[1]:  # Si il y a du contenu
+            nom_thematique = thematique_principale[0].replace('_', ' ').title()
+            return f"{nom_thematique}: {thematique_principale[1][:100]}..."
+        
+        return "Informations limitées"
         
     def _creer_dataframe_synthese(self, entreprises: List[Dict]) -> pd.DataFrame:
         """Création du DataFrame de synthèse thématique"""
@@ -144,7 +213,7 @@ class GenerateurRapports:
         return pd.DataFrame(donnees_synthese)
         
     def _creer_dataframe_thematique(self, entreprises: List[Dict], thematique: str) -> pd.DataFrame:
-        """Création du DataFrame détaillé pour une thématique avec contenu textuel"""
+        """Création du DataFrame détaillé pour une thématique avec contenu textuel et liens"""
         donnees_thematique = []
         
         for entreprise in entreprises:
@@ -153,34 +222,79 @@ class GenerateurRapports:
                 
                 result = analyse[thematique]
                 
-                # ✅ CORRECTION : Extraction des informations textuelles
+                # ✅ EXTRACTION COMPLÈTE DES INFORMATIONS
                 extraits_textuels = []
                 mots_cles_trouves = []
+                liens_sources = []
+                details_evenements = []
                 
+                # Parcours de tous les détails trouvés
                 for detail in result.get('details', []):
+                    source = detail.get('source', 'Inconnue')
                     info = detail.get('informations', {})
                     
-                    # Mots-clés trouvés
+                    # 1. Mots-clés trouvés
                     if 'mots_cles' in info:
                         mots_cles_trouves.extend(info['mots_cles'])
                     
-                    # Extraits contextuels du site officiel
+                    # 2. Liens sources
+                    if 'url' in info and info['url']:
+                        liens_sources.append(info['url'])
+                    
+                    # 3. Extraits contextuels du site officiel
                     if 'extraits_contextuels' in info:
                         for extrait in info['extraits_contextuels']:
-                            extraits_textuels.append(f"[{extrait['mot_cle']}] {extrait['contexte']}")
+                            details_evenements.append({
+                                'source': 'Site officiel',
+                                'contenu': f"Contexte: {extrait['contexte']}",
+                                'mot_cle': extrait['mot_cle'],
+                                'url': info.get('url', '')
+                            })
                     
-                    # Extraits des recherches web
+                    # 4. Extraits des recherches web avec détails
                     if 'extraits_textuels' in info:
                         for extrait in info['extraits_textuels']:
-                            extraits_textuels.append(f"[Web] {extrait['titre']} - {extrait['description']}")
+                            details_evenements.append({
+                                'source': 'Recherche web',
+                                'titre': extrait.get('titre', ''),
+                                'contenu': extrait.get('description', ''),
+                                'url': extrait.get('url', ''),
+                                'extrait_complet': extrait.get('extrait_complet', '')
+                            })
                     
-                    # Résumé de contenu
+                    # 5. Résumé de contenu du site officiel
                     if 'resume_contenu' in info:
-                        extraits_textuels.append(f"[Résumé] {info['resume_contenu']}")
+                        details_evenements.append({
+                            'source': 'Site officiel - Résumé',
+                            'contenu': info['resume_contenu'],
+                            'url': info.get('url', '')
+                        })
+                
+                # ✅ FORMATAGE DES INFORMATIONS DÉTAILLÉES
+                
+                # Création du texte détaillé avec sources
+                informations_detaillees = []
+                for i, detail in enumerate(details_evenements[:5], 1):  # Top 5 détails
+                    if detail.get('titre'):
+                        info_text = f"[{detail['source']}] {detail['titre']}: {detail['contenu']}"
+                    else:
+                        info_text = f"[{detail['source']}] {detail['contenu']}"
                     
-                    # Extrait simple (ancien format)
-                    if 'extrait' in info and info['extrait']:
-                        extraits_textuels.append(f"[Source] {info['extrait']}")
+                    if detail.get('url'):
+                        info_text += f" (Source: {detail['url']})"
+                    
+                    informations_detaillees.append(info_text)
+                
+                # Liens sources uniques
+                liens_uniques = list(set([lien for lien in liens_sources if lien and lien != '']))
+                
+                # Formatage des liens cliquables pour Excel
+                liens_formattes = []
+                for lien in liens_uniques[:3]:  # Top 3 liens
+                    if lien.startswith('http'):
+                        liens_formattes.append(lien)
+                    else:
+                        liens_formattes.append(f"https://{lien}")
                 
                 ligne = {
                     'Entreprise': entreprise['nom'],
@@ -189,16 +303,50 @@ class GenerateurRapports:
                     'Secteur': entreprise.get('secteur_naf', ''),
                     'Score_Pertinence': round(result['score_pertinence'], 2),
                     'Niveau_Confiance': result.get('niveau_confiance', 'N/A'),
-                    'Sources': ', '.join(result.get('sources', [])),
-                    'Mots_Cles_Trouves': ', '.join(set(mots_cles_trouves)),  # ✅ MOTS-CLÉS
-                    'Informations_Textuelles': ' | '.join(extraits_textuels[:5]),  # ✅ CONTENU TEXTUEL !
-                    'Nombre_Mentions': len(extraits_textuels),
+                    'Sources_Analysées': ', '.join(result.get('sources', [])),
+                    'Mots_Cles_Detectés': ', '.join(set(mots_cles_trouves)),
+                    
+                    # ✅ NOUVELLES COLONNES AVEC DÉTAILS
+                    'Détails_Informations': ' | '.join(informations_detaillees),
+                    'Liens_Sources': ' | '.join(liens_formattes),
+                    'Nombre_Sources': len(liens_uniques),
+                    'Première_Source': liens_formattes[0] if liens_formattes else '',
+                    'Résumé_Événement': self._extraire_resume_evenement(details_evenements, thematique),
+                    
+                    'Nombre_Mentions': len(details_evenements),
                     'Date_Analyse': entreprise.get('date_analyse', ''),
-                    'Site_Web': entreprise.get('site_web', '')
+                    'Site_Web_Entreprise': entreprise.get('site_web', '')
                 }
                 donnees_thematique.append(ligne)
                 
         return pd.DataFrame(donnees_thematique)
+    
+    def _extraire_resume_evenement(self, details_evenements: List[Dict], thematique: str) -> str:
+        """Extraction d'un résumé intelligent de l'événement"""
+        if not details_evenements:
+            return ""
+        
+        # Combinaison des contenus pour créer un résumé
+        contenus = []
+        for detail in details_evenements[:3]:  # Top 3 détails
+            contenu = detail.get('contenu', '')
+            if contenu and len(contenu) > 20:  # Contenu significatif
+                contenus.append(contenu)
+        
+        if not contenus:
+            return ""
+        
+        # Résumé intelligent selon la thématique
+        if thematique == 'recrutements':
+            return f"Recrutement détecté: {' | '.join(contenus)}"
+        elif thematique == 'evenements':
+            return f"Événement identifié: {' | '.join(contenus)}"
+        elif thematique == 'innovations':
+            return f"Innovation repérée: {' | '.join(contenus)}"
+        elif thematique == 'vie_entreprise':
+            return f"Développement entreprise: {' | '.join(contenus)}"
+        else:
+            return f"Activité {thematique}: {' | '.join(contenus)}"
         
     def _creer_dataframe_communes(self, entreprises: List[Dict]) -> pd.DataFrame:
         """Création du DataFrame de résumé par commune"""
@@ -430,7 +578,7 @@ class GenerateurRapports:
         return html
         
     def _generer_section_entreprises(self, entreprises: List[Dict]) -> str:
-        """Génération de la section détail entreprises"""
+        """Génération de la section détail entreprises avec informations complètes"""
         html = ""
         
         # Tri par score décroissant
@@ -445,30 +593,148 @@ class GenerateurRapports:
             score_class = self._get_score_class(score_global)
             
             html += f"""
-            <div class="entreprise">
-                <h4>{entreprise['nom']} ({entreprise['commune']})</h4>
-                <p><strong>Score global:</strong> <span class="score {score_class}">{score_global:.2f}</span></p>
-                <p><strong>Secteur:</strong> {entreprise.get('secteur_naf', 'Non spécifié')}</p>
-                <p><strong>Thématiques principales:</strong> {', '.join(entreprise.get('thematiques_principales', []))}</p>
+            <div class="entreprise" style="margin-bottom: 30px; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+                <h4 style="color: #2c3e50; margin-bottom: 10px;">
+                    {entreprise['nom']} ({entreprise['commune']})
+                </h4>
+                <div style="display: flex; gap: 20px; margin-bottom: 15px;">
+                    <div><strong>Score global:</strong> <span class="score {score_class}">{score_global:.2f}</span></div>
+                    <div><strong>Secteur:</strong> {entreprise.get('secteur_naf', 'Non spécifié')}</div>
+                    <div><strong>SIRET:</strong> {entreprise.get('siret', 'N/A')}</div>
+                </div>
                 
-                <div style="margin-top: 10px;">
-                    <strong>Détails thématiques:</strong>
-                    <ul>
+                <div style="margin-bottom: 15px;">
+                    <strong>Thématiques principales:</strong> {', '.join(entreprise.get('thematiques_principales', []))}
+                </div>
             """
             
-            # Détails par thématique
+            # ✅ DÉTAILS PAR THÉMATIQUE AVEC INFORMATIONS COMPLÈTES
             analyse = entreprise.get('analyse_thematique', {})
-            for thematique in self.thematiques:
-                if thematique in analyse and analyse[thematique].get('trouve', False):
+            thematiques_trouvees = [t for t in self.thematiques if t in analyse and analyse[t].get('trouve', False)]
+            
+            if thematiques_trouvees:
+                html += f"""
+                <div style="margin-top: 20px;">
+                    <strong style="color: #2c3e50;">📋 Détails des activités détectées:</strong>
+                """
+                
+                for thematique in thematiques_trouvees:
                     result = analyse[thematique]
+                    score = result['score_pertinence']
+                    score_class = self._get_score_class(score)
+                    
                     html += f"""
-                    <li>{thematique.replace('_', ' ').title()}: 
-                        <span class="score {self._get_score_class(result['score_pertinence'])}">{result['score_pertinence']:.2f}</span>
-                        ({result.get('niveau_confiance', 'N/A')})
-                    </li>
+                    <div style="margin: 15px 0; padding: 15px; background-color: #f8f9fa; border-left: 4px solid #3498db;">
+                        <h5 style="color: #2c3e50; margin: 0 0 10px 0;">
+                            {thematique.replace('_', ' ').title()} 
+                            <span class="score {score_class}" style="font-size: 0.9em;">(Score: {score:.2f})</span>
+                        </h5>
                     """
                     
-            html += "</ul></div></div>"
+                    # Extraction des informations détaillées
+                    details_info = []
+                    liens_sources = []
+                    
+                    for detail in result.get('details', []):
+                        info = detail.get('informations', {})
+                        
+                        # Extraits textuels avec sources
+                        if 'extraits_textuels' in info:
+                            for extrait in info['extraits_textuels']:
+                                details_info.append({
+                                    'type': 'web',
+                                    'titre': extrait.get('titre', ''),
+                                    'contenu': extrait.get('description', ''),
+                                    'url': extrait.get('url', '')
+                                })
+                        
+                        # Extraits contextuels du site officiel
+                        if 'extraits_contextuels' in info:
+                            for extrait in info['extraits_contextuels']:
+                                details_info.append({
+                                    'type': 'site',
+                                    'titre': f"Mot-clé: {extrait['mot_cle']}",
+                                    'contenu': extrait['contexte'],
+                                    'url': info.get('url', '')
+                                })
+                        
+                        # Résumé de contenu
+                        if 'resume_contenu' in info:
+                            details_info.append({
+                                'type': 'resume',
+                                'titre': 'Résumé du site officiel',
+                                'contenu': info['resume_contenu'][:200] + '...' if len(info['resume_contenu']) > 200 else info['resume_contenu'],
+                                'url': info.get('url', '')
+                            })
+                        
+                        # Collecte des liens
+                        if 'url' in info and info['url']:
+                            liens_sources.append(info['url'])
+                    
+                    # Affichage des détails
+                    if details_info:
+                        html += "<div style='margin-top: 10px;'>"
+                        
+                        for i, detail in enumerate(details_info[:3], 1):  # Top 3 détails
+                            icon = "🌐" if detail['type'] == 'web' else "📱" if detail['type'] == 'site' else "📝"
+                            
+                            html += f"""
+                            <div style="margin: 8px 0; padding: 8px; background-color: white; border-radius: 4px;">
+                                <div style="font-weight: bold; color: #34495e;">
+                                    {icon} {detail['titre']}
+                                </div>
+                                <div style="margin: 5px 0; color: #2c3e50;">
+                                    {detail['contenu'][:300]}{'...' if len(detail['contenu']) > 300 else ''}
+                                </div>
+                            """
+                            
+                            if detail['url']:
+                                html += f"""
+                                <div style="margin-top: 5px;">
+                                    <a href="{detail['url']}" target="_blank" style="color: #3498db; text-decoration: none; font-size: 0.9em;">
+                                        🔗 Voir la source
+                                    </a>
+                                </div>
+                                """
+                            
+                            html += "</div>"
+                        
+                        html += "</div>"
+                    
+                    # Liens sources supplémentaires
+                    liens_uniques = list(set([lien for lien in liens_sources if lien and lien.startswith('http')]))
+                    if liens_uniques:
+                        html += f"""
+                        <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #ecf0f1;">
+                            <strong>📎 Sources supplémentaires:</strong><br>
+                        """
+                        
+                        for lien in liens_uniques[:3]:  # Top 3 liens
+                            domain = lien.split('/')[2] if '/' in lien else lien
+                            html += f"""
+                            <a href="{lien}" target="_blank" style="display: inline-block; margin: 2px 10px 2px 0; padding: 2px 8px; background-color: #ecf0f1; color: #2c3e50; text-decoration: none; border-radius: 3px; font-size: 0.85em;">
+                                {domain}
+                            </a>
+                            """
+                        
+                        html += "</div>"
+                    
+                    html += "</div>"  # Fin de la thématique
+                
+                html += "</div>"  # Fin des détails
+            
+            # Site web de l'entreprise
+            if entreprise.get('site_web'):
+                html += f"""
+                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ecf0f1;">
+                    <strong>🌐 Site web:</strong> 
+                    <a href="{entreprise['site_web']}" target="_blank" style="color: #3498db;">
+                        {entreprise['site_web']}
+                    </a>
+                </div>
+                """
+            
+            html += "</div>"  # Fin de l'entreprise
             
         return html
         
@@ -482,29 +748,69 @@ class GenerateurRapports:
             return "low"
             
     def generer_export_json(self, entreprises_enrichies: List[Dict]) -> str:
-        """Export des données en format JSON"""
+        """Export des données en format JSON avec gestion des types non sérialisables"""
         print("📄 Export JSON")
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         nom_fichier = f"veille_data_{timestamp}.json"
         chemin_fichier = self.dossier_sortie / nom_fichier
         
-        # Préparation des données pour l'export
+        # Préparation des données pour l'export avec nettoyage
         donnees_export = {
             'metadata': {
                 'timestamp': datetime.now().isoformat(),
                 'nb_entreprises': len(entreprises_enrichies),
                 'version': '1.0.0'
             },
-            'entreprises': entreprises_enrichies,
+            'entreprises': self._nettoyer_pour_json(entreprises_enrichies),
             'statistiques': self._calculer_statistiques_globales(entreprises_enrichies)
         }
         
         with open(chemin_fichier, 'w', encoding='utf-8') as f:
-            json.dump(donnees_export, f, ensure_ascii=False, indent=2)
+            json.dump(donnees_export, f, ensure_ascii=False, indent=2, default=self._json_serializer)
             
         print(f"✅ Export JSON généré: {chemin_fichier}")
         return str(chemin_fichier)
+        
+    def _nettoyer_pour_json(self, data):
+        """Nettoyage récursif des données pour la sérialisation JSON"""
+        if isinstance(data, dict):
+            return {key: self._nettoyer_pour_json(value) for key, value in data.items()}
+        elif isinstance(data, list):
+            return [self._nettoyer_pour_json(item) for item in data]
+        elif hasattr(data, 'isoformat'):  # datetime, Timestamp
+            return data.isoformat()
+        elif hasattr(data, 'item'):  # numpy types
+            return data.item()
+        elif str(type(data)).startswith('<class \'pandas'):  # pandas types
+            return str(data)
+        else:
+            return data
+            
+    def _json_serializer(self, obj):
+        """Sérialiseur personnalisé pour JSON"""
+        import pandas as pd
+        import numpy as np
+        
+        # Gestion des types pandas
+        if isinstance(obj, pd.Timestamp):
+            return obj.isoformat()
+        elif isinstance(obj, pd.Series):
+            return obj.tolist()
+        elif isinstance(obj, pd.DataFrame):
+            return obj.to_dict('records')
+        elif isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif hasattr(obj, 'isoformat'):  # datetime objects
+            return obj.isoformat()
+        elif hasattr(obj, '__dict__'):  # Custom objects
+            return obj.__dict__
+        else:
+            return str(obj)
         
     def generer_alertes_communes(self, entreprises_enrichies: List[Dict]) -> str:
         """Génération d'alertes ciblées par commune"""
@@ -567,23 +873,53 @@ class GenerateurRapports:
                     'timestamp': datetime.now().isoformat()
                 }
                 
-        # Sauvegarde
+        # Sauvegarde avec gestion des types non sérialisables
         with open(chemin_fichier, 'w', encoding='utf-8') as f:
-            json.dump(alertes, f, ensure_ascii=False, indent=2)
+            json.dump(alertes, f, ensure_ascii=False, indent=2, default=self._json_serializer)
             
         print(f"✅ Alertes générées: {chemin_fichier}")
         return str(chemin_fichier)
         
     def generer_tous_rapports(self, entreprises_enrichies: List[Dict]) -> Dict[str, str]:
-        """Génération de tous les rapports"""
+        """Génération de tous les rapports avec gestion d'erreurs individuelles"""
         print("📊 Génération de tous les rapports")
         
-        rapports = {
-            'excel': self.generer_rapport_excel(entreprises_enrichies),
-            'html': self.generer_rapport_html(entreprises_enrichies),
-            'json': self.generer_export_json(entreprises_enrichies),
-            'alertes': self.generer_alertes_communes(entreprises_enrichies)
-        }
+        rapports = {}
         
-        print("✅ Tous les rapports générés avec succès")
+        # 1. Rapport Excel (prioritaire)
+        try:
+            print("📊 Génération rapport Excel...")
+            rapports['excel'] = self.generer_rapport_excel(entreprises_enrichies)
+        except Exception as e:
+            print(f"❌ Erreur rapport Excel: {str(e)}")
+            rapports['excel'] = f"ERREUR: {str(e)}"
+        
+        # 2. Rapport HTML
+        try:
+            print("🌐 Génération rapport HTML...")
+            rapports['html'] = self.generer_rapport_html(entreprises_enrichies)
+        except Exception as e:
+            print(f"❌ Erreur rapport HTML: {str(e)}")
+            rapports['html'] = f"ERREUR: {str(e)}"
+        
+        # 3. Export JSON (avec gestion spéciale des Timestamp)
+        try:
+            print("📄 Génération export JSON...")
+            rapports['json'] = self.generer_export_json(entreprises_enrichies)
+        except Exception as e:
+            print(f"❌ Erreur export JSON: {str(e)}")
+            rapports['json'] = f"ERREUR: {str(e)}"
+        
+        # 4. Alertes communes
+        try:
+            print("🚨 Génération alertes communes...")
+            rapports['alertes'] = self.generer_alertes_communes(entreprises_enrichies)
+        except Exception as e:
+            print(f"❌ Erreur alertes: {str(e)}")
+            rapports['alertes'] = f"ERREUR: {str(e)}"
+        
+        # Compte des rapports générés avec succès
+        rapports_reussis = len([r for r in rapports.values() if not r.startswith("ERREUR:")])
+        print(f"✅ {rapports_reussis}/{len(rapports)} rapports générés avec succès")
+        
         return rapports
