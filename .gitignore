@@ -1,0 +1,31 @@
+# Fichiers Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.env
+
+# Fichiers de données sensibles - MODIFICATION ICI ↓
+# data/input/*.xlsx  # Commenté pour permettre le fichier de base
+data/input/*_sensible.xlsx  # Seuls les fichiers marqués "sensible"
+data/input/*_confidentiel.xlsx
+data/cache/
+*.log
+
+# Fichiers système
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Fichiers de sortie générés (mais pas les données d'entrée)
+data/output/*.xlsx
+data/output/*.html
+data/output/*.json

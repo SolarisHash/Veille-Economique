@@ -1,0 +1,40 @@
+# Dépendances pour le système de veille économique territoriale
+
+# Traitement des données
+pandas>=1.5.0
+numpy>=1.24.0
+openpyxl>=3.1.0
+
+# Requêtes web et scraping
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+urllib3>=1.26.0
+lxml>=4.9.0
+
+# Configuration et sérialisation
+pyyaml>=6.0
+python-dateutil>=2.8.0
+
+# Logging et monitoring
+logging>=0.4.9.6
+
+# Utilitaires
+pathlib>=1.0.1
+hashlib>=20081119
+collections>=0.3.0
+re>=2.2.1
+time>=1.6.3
+datetime>=4.7
+json>=2.0.9
+os>=0.1.4
+sys>=0.1.0
+typing>=3.7.4
+random>=1.0.1
+
+# Optionnel - pour extensions futures
+# selenium>=4.11.0        # Pour scraping JavaScript
+# scrapy>=2.10.0          # Pour scraping avancé
+# nltk>=3.8               # Pour analyse textuelle
+# textblob>=0.17.1        # Pour sentiment analysis
+# schedule>=1.2.0         # Pour automatisation
+# psutil>=5.9.0           # Pour monitoring système

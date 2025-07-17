@@ -1,0 +1,157 @@
+# Configuration du système de veille économique territoriale
+
+# Paramètres généraux
+projet:
+  nom: "Veille Économique Territoriale"
+  version: "1.0.0"
+  description: "Système automatisé de veille économique pour 20 communes"
+
+# Paramètres de traitement
+traitement:
+  echantillon_test: 10
+  periode_recherche_mois: 6
+  frequence_maj_semaines: 1
+  timeout_requetes_sec: 10
+  delai_entre_requetes_sec: 1
+
+# Thématiques de recherche
+thematiques:
+  - evenements
+  - recrutements
+  - vie_entreprise
+  - innovations
+  - exportations
+  - aides_subventions
+  - fondation_sponsor
+
+# Mots-clés par thématique
+mots_cles:
+  evenements:
+    - "porte ouverte"
+    - "portes ouvertes"
+    - "conférence"
+    - "salon"
+    - "forum"
+    - "rencontre"
+    - "événement"
+    - "manifestation"
+    - "colloque"
+    - "séminaire"
+    
+  recrutements:
+    - "recrutement"
+    - "embauche"
+    - "recrute"
+    - "offre emploi"
+    - "offres emploi"
+    - "CDI"
+    - "CDD"
+    - "stage"
+    - "alternance"
+    - "apprentissage"
+    - "carrière"
+    - "poste"
+    
+  vie_entreprise:
+    - "ouverture"
+    - "fermeture"
+    - "déménagement"
+    - "implantation"
+    - "développement"
+    - "expansion"
+    - "partenariat"
+    - "collaboration"
+    - "fusion"
+    - "acquisition"
+    - "restructuration"
+    - "rachat"
+    
+  innovations:
+    - "innovation"
+    - "nouveau produit"
+    - "nouveau service"
+    - "lancement"
+    - "brevets"
+    - "R&D"
+    - "recherche développement"
+    - "technologie"
+    - "prototype"
+    - "modernisation"
+    
+  exportations:
+    - "export"
+    - "exportation"
+    - "international"
+    - "étranger"
+    - "marché international"
+    - "contrat export"
+    - "développement international"
+    - "commerce extérieur"
+    
+  aides_subventions:
+    - "subvention"
+    - "aide"
+    - "financement"
+    - "soutien"
+    - "crédit"
+    - "subventionné"
+    - "aidé"
+    - "prêt"
+    - "investissement public"
+    - "dispositif d'aide"
+    
+  fondation_sponsor:
+    - "fondation"
+    - "sponsor"
+    - "sponsoring"
+    - "mécénat"
+    - "partenaire"
+    - "soutien"
+    - "dons"
+    - "charitable"
+    - "solidarité"
+    - "engagement social"
+
+# Sources de données
+sources:
+  prioritaires:
+    - "site_officiel"
+    - "presse_locale"
+    - "communiques_officiels"
+    
+  secondaires:
+    - "reseaux_sociaux"
+    - "annuaires_professionnels"
+    - "sites_institutionnels"
+
+# Paramètres de scoring
+scoring:
+  poids_source_officielle: 1.0
+  poids_presse_locale: 0.8
+  poids_web_general: 0.6
+  poids_reseaux_sociaux: 0.4
+  
+  seuil_pertinence_minimum: 0.3
+  bonus_recence: 0.2
+  bonus_source_multiple: 0.1
+
+# Paramètres de cache
+cache:
+  duree_validite_heures: 24
+  taille_max_mb: 100
+  nettoyage_auto: true
+
+# Paramètres export
+export:
+  format_principal: "xlsx"
+  formats_secondaires: ["csv", "json"]
+  generer_rapport_html: true
+  inclure_sources: true
+  inclure_extraits: true
+
+# Logging
+logging:
+  niveau: "INFO"
+  fichier: "logs/veille_economique.log"
+  rotation: true
+  taille_max_mb: 10
