@@ -246,7 +246,7 @@ def main():
     veille = VeilleEconomique()
     
     # Vérification fichier Excel
-    fichier_entreprises = "data/input/entreprises_base.xlsx"
+    fichier_entreprises = "data/input/entreprises_test.xlsx"
     if not os.path.exists(fichier_entreprises):
         print(f"❌ Fichier manquant: {fichier_entreprises}")
         print("📁 Veuillez placer votre fichier Excel dans data/input/")

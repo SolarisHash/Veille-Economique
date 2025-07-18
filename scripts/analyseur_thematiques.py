@@ -91,14 +91,20 @@ class AnalyseurThematiques:
         return entreprise
         
     def _analyser_source(self, donnees: Dict, source: str, resultats_thematiques: Dict):
-        """Analyse d'une source de données"""
+        """Analyse d'une source de données avec capture complète des informations"""
+        print(f"    🔍 Analyse source: {source}")
+        
         for thematique, info in donnees.items():
             if thematique in resultats_thematiques:
+                print(f"      🎯 Analyse thématique: {thematique}")
                 
                 # Calcul du score de pertinence
                 score = self._calculer_score_pertinence(info, source)
+                print(f"         💯 Score calculé: {score:.2f}")
                 
                 if score > self.seuil_pertinence:
+                    print(f"         ✅ Score > seuil ({self.seuil_pertinence})")
+                    
                     resultats_thematiques[thematique]['trouve'] = True
                     resultats_thematiques[thematique]['score_pertinence'] = max(
                         resultats_thematiques[thematique]['score_pertinence'], score
@@ -108,41 +114,204 @@ class AnalyseurThematiques:
                     if source not in resultats_thematiques[thematique]['sources']:
                         resultats_thematiques[thematique]['sources'].append(source)
                         
-                    # Ajout des détails
+                    # ✅ EXTRACTION COMPLÈTE DES INFORMATIONS
+                    informations_extraites = self._extraire_informations_completes(info, source)
+                    
+                    # Ajout des détails avec TOUTES les informations
                     detail = {
                         'source': source,
                         'score': score,
-                        'informations': self._extraire_informations(info),
-                        'timestamp': datetime.now().isoformat()
+                        'informations': informations_extraites,  # ← INFORMATIONS COMPLÈTES
+                        'timestamp': datetime.now().isoformat(),
+                        'raw_data': info  # ← DONNÉES BRUTES pour debug
                     }
                     resultats_thematiques[thematique]['details'].append(detail)
                     
+                    print(f"         📊 Informations extraites: {len(informations_extraites)} clés")
+                    print(f"         📋 Détails ajoutés: {list(informations_extraites.keys())}")
+                else:
+                    print(f"         ⚪ Score trop faible ({score:.2f} <= {self.seuil_pertinence})")
+    
+    def _extraire_informations_completes(self, info: Dict, source: str) -> Dict:
+        """Extraction COMPLÈTE des informations avec tous les détails textuels"""
+        informations = {
+            'source': source,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        # 1. Mots-clés trouvés
+        if 'mots_cles_trouves' in info:
+            informations['mots_cles'] = info['mots_cles_trouves']
+            print(f"           🔑 Mots-clés: {info['mots_cles_trouves']}")
+        
+        # 2. URL source
+        if 'url' in info:
+            informations['url'] = info['url']
+            print(f"           🔗 URL: {info['url']}")
+        
+        # 3. Type d'information
+        if 'type' in info:
+            informations['type'] = info['type']
+        
+        # 4. ✅ EXTRAITS TEXTUELS (le plus important!)
+        if 'extraits_textuels' in info:
+            informations['extraits_textuels'] = info['extraits_textuels']
+            print(f"           📄 Extraits textuels: {len(info['extraits_textuels'])}")
+            
+            # Debug des extraits
+            for i, extrait in enumerate(info['extraits_textuels'][:2]):
+                titre = extrait.get('titre', 'Sans titre')
+                description = extrait.get('description', 'Sans description')
+                print(f"              {i+1}. {titre[:40]} - {description[:60]}...")
+        
+        # 5. ✅ EXTRAITS CONTEXTUELS (site officiel)
+        if 'extraits_contextuels' in info:
+            informations['extraits_contextuels'] = info['extraits_contextuels']
+            print(f"           🎯 Extraits contextuels: {len(info['extraits_contextuels'])}")
+            
+            for i, extrait in enumerate(info['extraits_contextuels'][:2]):
+                mot_cle = extrait.get('mot_cle', 'N/A')
+                contexte = extrait.get('contexte', 'N/A')
+                print(f"              {i+1}. [{mot_cle}] {contexte[:50]}...")
+        
+        # 6. ✅ RÉSUMÉ DE CONTENU
+        if 'resume_contenu' in info:
+            informations['resume_contenu'] = info['resume_contenu']
+            print(f"           📝 Résumé: {info['resume_contenu'][:60]}...")
+        
+        # 7. ✅ URLS COLLECTÉES
+        urls_collectees = []
+        if 'urls' in info:
+            urls_collectees.extend(info['urls'])
+        if 'url' in info:
+            urls_collectees.append(info['url'])
+        
+        if urls_collectees:
+            informations['urls_sources'] = list(set(urls_collectees))  # Dédupliqué
+            print(f"           🌐 URLs: {len(urls_collectees)} collectées")
+        
+        # 8. ✅ PERTINENCE ET MÉTADONNÉES
+        if 'pertinence' in info:
+            informations['score_pertinence'] = info['pertinence']
+        
+        # 9. ✅ TOUS LES AUTRES CHAMPS DISPONIBLES
+        for cle, valeur in info.items():
+            if cle not in informations and cle not in ['raw_data']:
+                informations[cle] = valeur
+        
+        print(f"           ✅ Total informations extraites: {len(informations)} champs")
+        return informations
+                    
     def _calculer_score_pertinence(self, info: Dict, source: str) -> float:
-        """Calcul du score de pertinence d'une information"""
+        """Calcul du score de pertinence avec validation stricte"""
         score_base = 0.0
         
         # Score basé sur le nombre de mots-clés trouvés
         if 'mots_cles_trouves' in info:
             nb_mots_cles = len(info['mots_cles_trouves'])
-            score_base = min(nb_mots_cles * 0.2, 1.0)
+            # Score plus conservateur
+            score_base = min(nb_mots_cles * 0.15, 0.6)  # Maximum 0.6 au lieu de 1.0
             
         # Score basé sur la pertinence définie
         if 'pertinence' in info:
             score_base = max(score_base, info['pertinence'])
             
-        # Score basé sur la probabilité (pour les simulations)
-        if 'probabilite' in info:
-            score_base = max(score_base, info['probabilite'])
+        # ✅ VALIDATION ANTI-FAUX POSITIFS
+        if 'extraits_textuels' in info:
+            score_validite = self._valider_qualite_extraits(info['extraits_textuels'])
+            score_base *= score_validite  # Réduction si extraits peu pertinents
             
-        # Bonus selon la source
-        bonus_source = self._get_bonus_source(source)
+        # Bonus selon la source (réduits)
+        bonus_source = self._get_bonus_source_realiste(source)
         
-        # Bonus pour les informations récentes
-        bonus_recence = self._get_bonus_recence(info)
+        # Bonus pour les informations récentes (réduit)
+        bonus_recence = self._get_bonus_recence(info) * 0.5  # Divisé par 2
         
-        score_final = min(score_base + bonus_source + bonus_recence, 1.0)
+        score_final = min(score_base + bonus_source + bonus_recence, 0.8)  # Maximum 0.8
         return score_final
+    
+    def _valider_qualite_extraits(self, extraits_textuels: List[Dict]) -> float:
+        """Validation de la qualité des extraits trouvés"""
+        if not extraits_textuels:
+            return 0.1
         
+        score_qualite = 1.0
+        
+        for extrait in extraits_textuels:
+            titre = extrait.get('titre', '').lower()
+            description = extrait.get('description', '').lower()
+            url = extrait.get('url', '').lower()
+            
+            contenu = f"{titre} {description} {url}"
+            
+            # Pénalités pour contenu non pertinent
+            penalites = [
+                ('forum.wordreference.com', -0.8),  # Forums linguistiques
+                ('wikipedia.org', -0.3),            # Wikipédia généraliste
+                ('dictionary', -0.6),               # Dictionnaires
+                ('translation', -0.6),              # Traductions
+                ('grammar', -0.7),                  # Grammaire
+                ('linguistique', -0.7),             # Linguistique
+                ('definition', -0.5),               # Définitions
+                ('much or many', -0.9),             # Discussions grammaticales
+                ('is/are', -0.9),                   # Questions grammaticales
+            ]
+            
+            for terme_penalite, reduction in penalites:
+                if terme_penalite in contenu:
+                    score_qualite += reduction
+                    print(f"         ⚠️  Pénalité {terme_penalite}: {reduction}")
+            
+            # Bonus pour contenu pertinent
+            bonus = [
+                ('.fr', 0.1),                       # Sites français
+                ('entreprise', 0.1),                # Contexte entreprise
+                ('emploi', 0.2),                    # Emploi
+                ('recrutement', 0.2),               # Recrutement
+                ('innovation', 0.15),               # Innovation
+                ('développement', 0.1),             # Développement
+                ('économie', 0.1),                  # Économie
+            ]
+            
+            for terme_bonus, augmentation in bonus:
+                if terme_bonus in contenu:
+                    score_qualite += augmentation
+        
+        # Score final entre 0.1 et 1.0
+        return max(0.1, min(score_qualite, 1.0))
+    
+    def _get_bonus_source_realiste(self, source: str) -> float:
+        """Bonus réduits selon la fiabilité de la source"""
+        bonus = {
+            'site_officiel': 0.2,      # Réduit de 0.3 à 0.2
+            'presse_locale': 0.15,     # Réduit de 0.2 à 0.15
+            'web_general': 0.05,       # Réduit de 0.1 à 0.05
+            'enrichissement_insee': 0.1 # Nouveau: données INSEE enrichies
+        }
+        return bonus.get(source, 0.0)
+    
+    def _calculer_score_global(self, resultats_thematiques: Dict) -> float:
+        """Calcul du score global avec pondération réaliste"""
+        scores_valides = []
+        
+        for thematique, res in resultats_thematiques.items():
+            if res['trouve'] and res['score_pertinence'] > 0.3:  # Seuil plus élevé
+                scores_valides.append(res['score_pertinence'])
+        
+        if not scores_valides:
+            return 0.0
+            
+        # Moyenne pondérée plus conservative
+        score_moyen = sum(scores_valides) / len(scores_valides)
+        
+        # Bonus diversité réduit
+        bonus_diversite = min(len(scores_valides) * 0.02, 0.1)  # Maximum 0.1
+        
+        # Score final plus réaliste
+        score_final = min(score_moyen + bonus_diversite, 0.8)  # Maximum 0.8
+        
+        return score_final    
+    
     def _get_bonus_source(self, source: str) -> float:
         """Bonus selon la fiabilité de la source"""
         bonus = {
