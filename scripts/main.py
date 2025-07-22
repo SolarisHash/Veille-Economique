@@ -18,6 +18,8 @@ from scripts.extracteur_donnees import ExtracteurDonnees
 from scripts.recherche_web import RechercheWeb
 from scripts.analyseur_thematiques import AnalyseurThematiques
 from scripts.generateur_rapports import GenerateurRapports
+from scripts.integration_linkedin import integrer_linkedin_veille
+
 
 class VeilleEconomique:
     """Classe principale pour la veille économique"""
@@ -235,6 +237,191 @@ class VeilleEconomique:
         print("📊 Génération rapport synthétique")
         print("⚠️  Cette fonctionnalité sera disponible après plusieurs analyses")
         pass
+
+    def traiter_echantillon_avec_linkedin(self, fichier_excel, nb_entreprises=10):
+        """Version enrichie avec collecte LinkedIn optionnelle"""
+        print(f"🚀 Démarrage analyse échantillon + LinkedIn ({nb_entreprises} entreprises)")
+        
+        try:
+            # 1-3. Étapes classiques (extraction, recherche web, analyse)
+            extracteur = ExtracteurDonnees(fichier_excel)
+            entreprises = extracteur.extraire_echantillon(nb_entreprises)
+            
+            recherche = RechercheWeb(self.periode_recherche)
+            resultats_bruts = []
+            
+            for entreprise in entreprises:
+                resultats = recherche.rechercher_entreprise(entreprise)
+                resultats_bruts.append(resultats)
+            
+            analyseur = AnalyseurThematiques(self.config['thematiques'])
+            donnees_enrichies = analyseur.analyser_resultats(resultats_bruts)
+            
+            # 4. ✅ NOUVELLE ÉTAPE : Intégration LinkedIn
+            print("\n🔗 ÉTAPE BONUS - INTÉGRATION LINKEDIN")
+            print("-" * 40)
+            
+            choix = input("Voulez-vous préparer la collecte LinkedIn ? (y/N): ").lower()
+            
+            if choix in ['y', 'yes', 'oui']:
+                success_linkedin = integrer_linkedin_veille(
+                    entreprises=entreprises, 
+                    max_entreprises=min(5, nb_entreprises)  # Limité pour test
+                )
+                
+                if success_linkedin:
+                    print("✅ Collecte LinkedIn préparée - suivez les instructions")
+                    # Pause pour permettre à l'utilisateur de collecter
+                    input("Appuyez sur Entrée après avoir collecté les données LinkedIn...")
+                    
+                    # 5. Intégration des données LinkedIn collectées
+                    donnees_linkedin = self._charger_donnees_linkedin()
+                    if donnees_linkedin:
+                        donnees_enrichies = self._enrichir_avec_linkedin(donnees_enrichies, donnees_linkedin)
+                        print(f"✅ {len(donnees_linkedin)} entreprises enrichies avec LinkedIn")
+            
+            # 5. Génération des rapports (comme avant)
+            generateur = GenerateurRapports()
+            rapports_generes = generateur.generer_tous_rapports(donnees_enrichies)
+            
+            return rapports_generes
+            
+        except Exception as e:
+            print(f"❌ Erreur traitement avec LinkedIn: {e}")
+            return None
+
+    def _charger_donnees_linkedin(self):
+        """Charge les données LinkedIn collectées"""
+        try:
+            donnees_linkedin = {}
+            linkedin_dir = Path("data/linkedin/results")
+            
+            if linkedin_dir.exists():
+                for fichier in linkedin_dir.glob("linkedin_*.json"):
+                    try:
+                        with open(fichier, 'r', encoding='utf-8') as f:
+                            data = json.load(f)
+                            company_name = data.get('company', {}).get('name')
+                            if company_name:
+                                donnees_linkedin[company_name] = data
+                    except Exception as e:
+                        print(f"⚠️ Erreur lecture {fichier}: {e}")
+            
+            return donnees_linkedin
+        except Exception as e:
+            print(f"❌ Erreur chargement LinkedIn: {e}")
+            return {}
+
+    def _enrichir_avec_linkedin(self, donnees_enrichies, donnees_linkedin):
+        """Enrichit les données principales avec les posts LinkedIn"""
+        try:
+            for entreprise in donnees_enrichies:
+                nom_entreprise = entreprise['nom']
+                
+                # Recherche correspondance (approximative)
+                donnees_matching = None
+                for nom_linkedin, data in donnees_linkedin.items():
+                    if self._match_entreprise_linkedin(nom_entreprise, nom_linkedin):
+                        donnees_matching = data
+                        break
+                
+                if donnees_matching:
+                    # Enrichissement avec données LinkedIn
+                    entreprise['linkedin_data'] = {
+                        'profil_entreprise': donnees_matching.get('company', {}),
+                        'posts_recents': donnees_matching.get('posts', []),
+                        'nombre_posts': len(donnees_matching.get('posts', [])),
+                        'date_collecte': donnees_matching.get('extraction_metadata', {}).get('timestamp'),
+                        'analyse_posts': self._analyser_posts_linkedin(donnees_matching.get('posts', []))
+                    }
+                    
+                    # Mise à jour du score global avec bonus LinkedIn
+                    if entreprise['linkedin_data']['nombre_posts'] > 0:
+                        entreprise['score_global'] = min(
+                            entreprise.get('score_global', 0) + 0.2,  # Bonus LinkedIn
+                            1.0
+                        )
+                    
+                    print(f"✅ {nom_entreprise} enrichi avec {len(donnees_matching.get('posts', []))} posts LinkedIn")
+            
+            return donnees_enrichies
+            
+        except Exception as e:
+            print(f"❌ Erreur enrichissement LinkedIn: {e}")
+            return donnees_enrichies
+
+    def _match_entreprise_linkedin(self, nom_original, nom_linkedin):
+        """Correspondance approximative entre noms d'entreprises"""
+        # Normalisation des noms
+        def normaliser(nom):
+            return ''.join(c.lower() for c in nom if c.isalnum())
+        
+        nom1 = normaliser(nom_original)
+        nom2 = normaliser(nom_linkedin)
+        
+        # Correspondance exacte
+        if nom1 == nom2:
+            return True
+        
+        # Correspondance partielle (mots en commun)
+        mots1 = set(mot for mot in nom_original.lower().split() if len(mot) > 3)
+        mots2 = set(mot for mot in nom_linkedin.lower().split() if len(mot) > 3)
+        
+        if mots1 and mots2:
+            correspondance = len(mots1.intersection(mots2)) / len(mots1.union(mots2))
+            return correspondance > 0.6
+        
+        return False
+
+    def _analyser_posts_linkedin(self, posts):
+        """Analyse thématique des posts LinkedIn"""
+        try:
+            if not posts:
+                return {}
+            
+            analyse = {
+                'themes_detectes': [],
+                'engagement_moyen': 0,
+                'types_contenu': {},
+                'posts_pertinents': []
+            }
+            
+            # Analyse par post
+            for post in posts:
+                texte = post.get('text', '').lower()
+                
+                # Détection thématique
+                themes = []
+                if any(mot in texte for mot in ['recrut', 'emploi', 'embauche', 'poste']):
+                    themes.append('recrutements')
+                if any(mot in texte for mot in ['innov', 'nouveau', 'lance', 'technologie']):
+                    themes.append('innovations')
+                if any(mot in texte for mot in ['événement', 'salon', 'conférence', 'rencontre']):
+                    themes.append('evenements')
+                if any(mot in texte for mot in ['partenariat', 'collaboration', 'développement']):
+                    themes.append('vie_entreprise')
+                
+                if themes:
+                    analyse['posts_pertinents'].append({
+                        'texte': post.get('text', '')[:200] + '...',
+                        'themes': themes,
+                        'date': post.get('publish_date', ''),
+                        'engagement': post.get('like_count', 0)
+                    })
+            
+            # Synthèse
+            tous_themes = []
+            for post in analyse['posts_pertinents']:
+                tous_themes.extend(post['themes'])
+            
+            from collections import Counter
+            analyse['themes_detectes'] = [theme for theme, count in Counter(tous_themes).most_common(3)]
+            
+            return analyse
+            
+        except Exception as e:
+            print(f"❌ Erreur analyse posts LinkedIn: {e}")
+            return {}
 
 def main():
     """Fonction principale"""

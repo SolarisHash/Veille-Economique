@@ -737,7 +737,36 @@ class GenerateurRapports:
             html += "</div>"  # Fin de l'entreprise
             
         return html
+
+    def _ajouter_section_linkedin(self, entreprises):
+        """Ajoute une section LinkedIn aux rapports"""
         
+        # Pour le rapport Excel
+        colonnes_linkedin = [
+            'LinkedIn_Présent', 'LinkedIn_Followers', 'LinkedIn_Posts_Récents',
+            'LinkedIn_Themes', 'LinkedIn_Engagement_Moyen', 'LinkedIn_URL'
+        ]
+        
+        for entreprise in entreprises:
+            linkedin_data = entreprise.get('linkedin_data', {})
+            
+            if linkedin_data:
+                entreprise['LinkedIn_Présent'] = 'Oui'
+                entreprise['LinkedIn_Followers'] = linkedin_data.get('profil_entreprise', {}).get('followers', '')
+                entreprise['LinkedIn_Posts_Récents'] = linkedin_data.get('nombre_posts', 0)
+                entreprise['LinkedIn_Themes'] = ', '.join(linkedin_data.get('analyse_posts', {}).get('themes_detectes', []))
+                
+                # Résumé des posts pertinents
+                posts_pertinents = linkedin_data.get('analyse_posts', {}).get('posts_pertinents', [])
+                if posts_pertinents:
+                    entreprise['LinkedIn_Résumé_Posts'] = ' | '.join([
+                        f"[{', '.join(post['themes'])}] {post['texte'][:100]}..."
+                        for post in posts_pertinents[:2]
+                    ])
+            else:
+                entreprise['LinkedIn_Présent'] = 'Non'
+                entreprise['LinkedIn_Posts_Récents'] = 0
+
     def _get_score_class(self, score: float) -> str:
         """Détermination de la classe CSS selon le score"""
         if score >= 0.7:
