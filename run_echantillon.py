@@ -21,7 +21,7 @@ def main():
     
     # ✅ UTILISATION DE VOS VRAIES DONNÉES
     fichier_excel = "data/input/entreprises_base.xlsx"
-    nb_entreprises = 10
+    nb_entreprises = 20
     
     # Vérifications préalables
     if not os.path.exists(fichier_excel):

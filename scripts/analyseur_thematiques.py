@@ -18,7 +18,7 @@ class AnalyseurThematiques:
         """Initialisation de l'analyseur"""
         self.thematiques = thematiques_config
         self.config = self._charger_config_mots_cles()
-        self.seuil_pertinence = 0.3
+        self.seuil_pertinence = 0.2
         self.periode_recente = timedelta(days=30)
         
     def _charger_config_mots_cles(self) -> Dict:
@@ -42,18 +42,43 @@ class AnalyseurThematiques:
             'fondation_sponsor': ['fondation', 'sponsor', 'mécénat']
         }
         
-    def analyser_resultats(self, resultats_bruts: List[Dict]) -> List[Dict]:
-        """Analyse thématique des résultats de recherche"""
+    def analyser_resultats(self, resultats_bruts: List[Dict], logger=None) -> List[Dict]:
+        """Analyse thématique avec logging détaillé"""
         print("🔬 Analyse thématique des résultats")
         
         entreprises_enrichies = []
         
         for i, resultat in enumerate(resultats_bruts, 1):
-            print(f"  📊 Analyse {i}/{len(resultats_bruts)}: {resultat['entreprise']['nom']}")
+            nom_entreprise = resultat['entreprise']['nom']
+            print(f"  📊 Analyse {i}/{len(resultats_bruts)}: {nom_entreprise}")
             
-            entreprise_enrichie = self._analyser_entreprise(resultat)
-            entreprises_enrichies.append(entreprise_enrichie)
-            
+            try:
+                entreprise_enrichie = self._analyser_entreprise(resultat)
+                entreprises_enrichies.append(entreprise_enrichie)
+                
+                # ✅ LOGGING ANALYSE THÉMATIQUE
+                if logger:
+                    thematiques_detectees = entreprise_enrichie.get('thematiques_principales', [])
+                    score_global = entreprise_enrichie.get('score_global', 0.0)
+                    
+                    logger.log_analyse_thematique(
+                        nom_entreprise=nom_entreprise,
+                        thematiques=thematiques_detectees,
+                        score=score_global
+                    )
+                    
+                    # Logging de problèmes spécifiques
+                    if score_global == 1.0:
+                        logger.log_probleme(nom_entreprise, "Score suspect", "Score parfait 1.0 - possible faux positif")
+                    elif score_global == 0.0:
+                        logger.log_probleme(nom_entreprise, "Aucune détection", "Aucune thématique détectée")
+                
+            except Exception as e:
+                print(f"    ❌ Erreur analyse {nom_entreprise}: {e}")
+                if logger:
+                    logger.log_analyse_thematique(nom_entreprise, [], 0.0, erreurs=[str(e)])
+                continue
+        
         print(f"✅ Analyse terminée pour {len(entreprises_enrichies)} entreprises")
         return entreprises_enrichies
         

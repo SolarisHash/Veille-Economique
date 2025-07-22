@@ -149,8 +149,17 @@ class ExtracteurDonnees:
         entreprises_completes = donnees_propres[
             (donnees_propres['siret_valide'] == True) &
             (donnees_propres['nom_normalise'] != "") &
-            (donnees_propres['commune_normalise'] != "")
+            (donnees_propres['commune_normalise'] != "") &
+            # ✅ NOUVEAU : Exclusion entreprises non-diffusibles
+            (~donnees_propres['nom_normalise'].str.contains('INFORMATION NON-DIFFUSIBLE', case=False, na=False)) &
+            (~donnees_propres['nom_normalise'].str.contains('NON-DIFFUSIBLE', case=False, na=False)) &
+            (~donnees_propres['nom_normalise'].str.contains('CONFIDENTIEL', case=False, na=False))
         ]
+
+        print(f"📊 Filtrage entreprises:")
+        print(f"   📋 Total initial: {len(donnees_propres)}")
+        print(f"   ✅ Recherchables: {len(entreprises_completes)}")
+        print(f"   ❌ Exclues (non-diffusibles): {len(donnees_propres) - len(entreprises_completes)}")
         
         if len(entreprises_completes) < nb_entreprises:
             print(f"⚠️  Seulement {len(entreprises_completes)} entreprises complètes disponibles")

@@ -263,106 +263,234 @@ class RechercheWeb:
         
         return requetes
 
-    def _valider_pertinence_resultats(self, resultats: List[Dict], nom_entreprise: str, commune: str, thematique: str) -> List[Dict]:
-        """✅ CORRIGÉ : Validation STRICTE que les résultats parlent bien de l'entreprise"""
-        print(f"        🔍 Validation pertinence pour: '{nom_entreprise}'")
+    def _construire_requetes_intelligentes(self, nom_entreprise: str, commune: str, thematique: str) -> List[str]:
+        """✅ REQUÊTES INTELLIGENTES adaptées aux noms complexes d'entreprises"""
+        requetes = []
         
-        if not resultats:
-            print(f"        ⚪ Aucun résultat à valider")
-            return []
+        print(f"        🎯 Construction requêtes pour: '{nom_entreprise}' à {commune} ({thematique})")
         
-        resultats_valides = []
-        mots_cles_thematique = self.thematiques_mots_cles.get(thematique, [])
+        # ✅ NETTOYAGE INTELLIGENT DU NOM
+        nom_clean = nom_entreprise.replace('"', '').replace("'", "").strip()
         
-        # Préparation des mots-clés de l'entreprise
-        nom_mots = [mot.lower() for mot in nom_entreprise.split() if len(mot) > 2]
-        print(f"        🏷️  Mots-clés entreprise: {nom_mots}")
+        # ✅ EXTRACTION MOTS-CLÉS PRINCIPAUX
+        mots_generiques = [
+            'S.A.S.', 'SARL', 'SAS', 'EURL', 'SA', 'SASU', 'SNC', 'SPRL', 'GIE',
+            'SOCIETE', 'SOCIÉTÉ', 'ENTREPRISE', 'COMPANY', 'COMPAGNIE', 'GROUP', 'GROUPE'
+        ]
         
-        for i, resultat in enumerate(resultats):
-            titre = resultat.get('titre', '').lower()
-            description = resultat.get('description', '').lower()
-            url = resultat.get('url', '').lower()
-            
-            texte_complet = f"{titre} {description} {url}"
-            
-            print(f"        📄 Validation résultat {i+1}: {titre[:50]}...")
-            
-            # ✅ VALIDATION 1 : L'entreprise DOIT être mentionnée
-            score_entreprise = 0
-            mots_entreprise_trouvés = []
-            
-            for mot_entreprise in nom_mots:
-                if mot_entreprise in texte_complet:
-                    score_entreprise += 1
-                    mots_entreprise_trouvés.append(mot_entreprise)
-            
-            # Calcul du pourcentage de correspondance
-            pourcentage_entreprise = score_entreprise / len(nom_mots) if nom_mots else 0
-            
-            print(f"           🎯 Score entreprise: {score_entreprise}/{len(nom_mots)} ({pourcentage_entreprise:.1%})")
-            print(f"           🔤 Mots trouvés: {mots_entreprise_trouvés}")
-            
-            # ❌ ANCIEN : Seuil trop strict
-            # if pourcentage_entreprise < 0.5:  # 50%
-            
-            # ✅ NOUVEAU : Seuil adaptatif
-            seuil_requis = 0.3 if len(nom_mots) > 3 else 0.5  # Plus souple pour noms longs
-            
-            if pourcentage_entreprise < seuil_requis:
-                print(f"           ❌ Entreprise pas assez mentionnée ({pourcentage_entreprise:.1%} < {seuil_requis:.1%})")
-                continue
-            
-            # ✅ VALIDATION 2 : Vérification thématique (moins stricte)
-            mots_thematique_trouves = [mot for mot in mots_cles_thematique if mot in texte_complet]
-            
-            # Si pas de mots thématiques ET pas de mention entreprise forte, rejeter
-            if not mots_thematique_trouves and pourcentage_entreprise < 0.7:
-                print(f"           ⚠️  Ni thématique ni entreprise fortement mentionnée")
-                continue
-            
-            # ✅ VALIDATION 3 : Exclusion des résultats parasites (assouplie)
-            exclusions_strictes = [
-                'forum.wordreference.com',
-                'wikipedia.org',
-                'dictionnaire',
-                'definition',
-                'grammar'
-            ]
-            
-            if any(exclu in texte_complet for exclu in exclusions_strictes):
-                print(f"           🚫 Source exclue détectée")
-                continue
-            
-            # ✅ VALIDATION 4 : Bonus pour sources pertinentes
-            sources_bonus = [
-                '.fr', 'entreprise', 'business', 'economie', 'industrie',
-                'emploi', 'job', 'recrutement', 'innovation', 'news', 'presse'
-            ]
-            
-            score_source = sum(1 for bonus in sources_bonus if bonus in texte_complet)
-            
-            # Construction du résultat validé
-            resultat_enrichi = resultat.copy()
-            resultat_enrichi.update({
-                'mots_cles_trouves': mots_entreprise_trouvés + mots_thematique_trouves,
-                'score_entreprise': pourcentage_entreprise,
-                'score_thematique': len(mots_thematique_trouves),
-                'score_source': score_source,
-                'score_global': pourcentage_entreprise * 0.7 + len(mots_thematique_trouves) * 0.2 + score_source * 0.1
-            })
-            
-            resultats_valides.append(resultat_enrichi)
-            print(f"           ✅ Résultat VALIDÉ (score: {resultat_enrichi['score_global']:.2f})")
+        mots_importants = []
+        mots = nom_clean.split()
         
-        # Tri par score global décroissant
-        resultats_valides.sort(key=lambda x: x.get('score_global', 0), reverse=True)
+        for mot in mots:
+            # Ignorer les mots génériques et trop courts
+            if mot.upper() not in mots_generiques and len(mot) > 2:
+                mots_importants.append(mot)
         
-        # Limitation aux 3 meilleurs
-        resultats_finaux = resultats_valides[:3]
+        print(f"        📝 Mots importants extraits: {mots_importants}")
         
-        print(f"        📊 Résultats validés: {len(resultats_finaux)}/{len(resultats)} conservés")
+        # ✅ DÉTECTION SECTEUR D'ACTIVITÉ (pour requêtes spécialisées)
+        secteur_detecte = self._detecter_secteur_activite(nom_clean)
+        if secteur_detecte:
+            print(f"        🏢 Secteur détecté: {secteur_detecte}")
         
-        return resultats_finaux
+        # ✅ STRATÉGIES DE REQUÊTES MULTIPLES
+        
+        # Stratégie 1: Nom pas trop long (< 40 caractères)
+        if len(nom_clean) < 40 and len(mots_importants) > 0:
+            print(f"        📋 Stratégie 1: Nom complet")
+            
+            if thematique == 'recrutements':
+                requetes.extend([
+                    f'"{nom_clean}" recrutement',
+                    f'"{nom_clean}" {commune} emploi',
+                    f'{nom_clean} offre emploi'
+                ])
+            elif thematique == 'evenements':
+                requetes.extend([
+                    f'"{nom_clean}" événement',
+                    f'"{nom_clean}" {commune} salon',
+                    f'{nom_clean} porte ouverte'
+                ])
+            elif thematique == 'innovations':
+                requetes.extend([
+                    f'"{nom_clean}" innovation',
+                    f'"{nom_clean}" nouveau produit',
+                    f'{nom_clean} {commune} développement'
+                ])
+            elif thematique == 'vie_entreprise':
+                requetes.extend([
+                    f'"{nom_clean}" développement',
+                    f'"{nom_clean}" {commune} expansion',
+                    f'{nom_clean} partenariat'
+                ])
+            elif thematique == 'exportations':
+                requetes.extend([
+                    f'"{nom_clean}" export international',
+                    f'"{nom_clean}" étranger',
+                    f'{nom_clean} marché international'
+                ])
+            elif thematique == 'aides_subventions':
+                requetes.extend([
+                    f'"{nom_clean}" subvention aide',
+                    f'"{nom_clean}" financement',
+                    f'{nom_clean} {commune} soutien'
+                ])
+            elif thematique == 'fondation_sponsor':
+                requetes.extend([
+                    f'"{nom_clean}" mécénat sponsor',
+                    f'"{nom_clean}" fondation',
+                    f'{nom_clean} solidarité'
+                ])
+        
+        # Stratégie 2: Nom trop long ou complexe (> 40 caractères)
+        elif len(mots_importants) >= 2:
+            print(f"        📋 Stratégie 2: Mots-clés principaux")
+            
+            # Utiliser les 2-3 mots les plus importants
+            mots_principaux = mots_importants[:3]
+            mots_cles_principaux = ' '.join(mots_principaux[:2])
+            
+            if thematique == 'recrutements':
+                requetes.extend([
+                    f'{mots_cles_principaux} {commune} recrutement',
+                    f'{mots_principaux[0]} emploi {commune}',
+                    f'{mots_cles_principaux} offre emploi'
+                ])
+            elif thematique == 'evenements':
+                requetes.extend([
+                    f'{mots_cles_principaux} {commune} événement',
+                    f'{mots_principaux[0]} salon {commune}',
+                    f'{mots_cles_principaux} manifestation'
+                ])
+            elif thematique == 'innovations':
+                requetes.extend([
+                    f'{mots_cles_principaux} innovation {commune}',
+                    f'{mots_principaux[0]} nouveau {commune}',
+                    f'{mots_cles_principaux} technologie'
+                ])
+            elif thematique == 'vie_entreprise':
+                requetes.extend([
+                    f'{mots_cles_principaux} {commune} entreprise',
+                    f'{mots_principaux[0]} développement {commune}',
+                    f'{mots_cles_principaux} partenariat'
+                ])
+            else:
+                # Thématiques moins courantes
+                mots_cles_thematique = self.thematiques_mots_cles.get(thematique, [])
+                if mots_cles_thematique:
+                    requetes.extend([
+                        f'{mots_cles_principaux} {mots_cles_thematique[0]}',
+                        f'{mots_principaux[0]} {commune} {mots_cles_thematique[0]}'
+                    ])
+        
+        # Stratégie 3: Recherche par secteur d'activité spécialisée
+        if secteur_detecte:
+            print(f"        📋 Stratégie 3: Secteur spécialisé")
+            requetes_secteur = self._generer_requetes_par_secteur(secteur_detecte, commune, thematique)
+            requetes.extend(requetes_secteur)
+        
+        # Stratégie 4: Fallback si très peu de mots utiles
+        elif len(mots_importants) == 1:
+            print(f"        📋 Stratégie 4: Fallback mot unique")
+            mot_unique = mots_importants[0]
+            
+            mots_cles_thematique = self.thematiques_mots_cles.get(thematique, [])
+            if mots_cles_thematique:
+                requetes.extend([
+                    f'{mot_unique} {commune} {mots_cles_thematique[0]}',
+                    f'{mot_unique} {mots_cles_thematique[0]}',
+                    f'{commune} {mot_unique} {mots_cles_thematique[1] if len(mots_cles_thematique) > 1 else mots_cles_thematique[0]}'
+                ])
+        
+        # ✅ NETTOYAGE ET OPTIMISATION DES REQUÊTES
+        
+        # Déduplication
+        requetes = list(dict.fromkeys(requetes))  # Préserve l'ordre + déduplique
+        
+        # Filtrage des requêtes trop courtes ou trop longues
+        requetes_filtrees = []
+        for requete in requetes:
+            if 10 <= len(requete) <= 100:  # Longueur raisonnable
+                # Vérification qu'il y a au moins 2 mots significatifs
+                mots_requete = [m for m in requete.split() if len(m) > 2]
+                if len(mots_requete) >= 2:
+                    requetes_filtrees.append(requete)
+        
+        # Limitation à 3 requêtes maximum
+        requetes_finales = requetes_filtrees[:3]
+        
+        print(f"        ✅ Requêtes finales générées ({len(requetes_finales)}):")
+        for i, requete in enumerate(requetes_finales, 1):
+            print(f"           {i}. '{requete}'")
+        
+        return requetes_finales
+
+    def _detecter_secteur_activite(self, nom_entreprise: str) -> str:
+        """Détection du secteur d'activité basé sur le nom"""
+        nom_lower = nom_entreprise.lower()
+        
+        secteurs = {
+            'hotel': ['hotel', 'hôtel', 'formule 1', 'ibis', 'mercure', 'novotel', 'hébergement'],
+            'laverie': ['laveries', 'laverie', 'pressing', 'nettoyage', 'blanchisserie'],
+            'transport': ['shuttle', 'taxi', 'vtc', 'transport', 'navette', 'bus'],
+            'restaurant': ['restaurant', 'brasserie', 'bistrot', 'café', 'bar', 'traiteur'],
+            'commerce': ['magasin', 'boutique', 'shop', 'store', 'commerce', 'vente'],
+            'medical': ['pharmacie', 'clinique', 'médical', 'santé', 'cabinet', 'dentaire'],
+            'garage': ['garage', 'auto', 'mécanique', 'carrosserie', 'pneu', 'automobile'],
+            'immobilier': ['immobilier', 'agence', 'syndic', 'gestion', 'location'],
+            'coiffure': ['coiffure', 'coiffeur', 'esthétique', 'beauté', 'salon'],
+            'btp': ['maçonnerie', 'électricité', 'plomberie', 'peinture', 'bâtiment', 'travaux']
+        }
+        
+        for secteur, mots_cles in secteurs.items():
+            if any(mot in nom_lower for mot in mots_cles):
+                return secteur
+        
+        return ""
+
+    def _generer_requetes_par_secteur(self, secteur: str, commune: str, thematique: str) -> List[str]:
+        """Génération de requêtes spécialisées par secteur"""
+        requetes_secteur = []
+        
+        # Mots-clés spécialisés par secteur
+        mots_secteur = {
+            'hotel': ['hôtel', 'hébergement', 'réception', 'service hôtelier'],
+            'laverie': ['pressing', 'nettoyage', 'lavage', 'entretien textile'],
+            'transport': ['transport', 'navette', 'déplacement', 'mobilité'],
+            'restaurant': ['restaurant', 'cuisine', 'service', 'gastronomie'],
+            'commerce': ['magasin', 'boutique', 'vente', 'commerce'],
+            'medical': ['santé', 'médical', 'soin', 'patient'],
+            'garage': ['automobile', 'mécanique', 'réparation', 'entretien'],
+            'immobilier': ['immobilier', 'logement', 'location', 'vente'],
+            'coiffure': ['coiffure', 'beauté', 'esthétique', 'soin'],
+            'btp': ['bâtiment', 'construction', 'rénovation', 'travaux']
+        }
+        
+        if secteur in mots_secteur:
+            mots_cles_secteur = mots_secteur[secteur]
+            
+            if thematique == 'recrutements':
+                requetes_secteur.extend([
+                    f'{commune} {mots_cles_secteur[0]} recrutement',
+                    f'{mots_cles_secteur[1]} emploi {commune}',
+                    f'{commune} {secteur} offre emploi'
+                ])
+            elif thematique == 'evenements':
+                requetes_secteur.extend([
+                    f'{commune} {mots_cles_secteur[0]} événement',
+                    f'{mots_cles_secteur[1]} salon {commune}',
+                    f'{commune} {secteur} manifestation'
+                ])
+            # Autres thématiques...
+            else:
+                # Requête générale
+                mots_cles_thematique = self.thematiques_mots_cles.get(thematique, [])
+                if mots_cles_thematique:
+                    requetes_secteur.append(
+                        f'{commune} {mots_cles_secteur[0]} {mots_cles_thematique[0]}'
+                    )
+        
+        return requetes_secteur[:2]  # Maximum 2 requêtes sectorielles
 
     def _extraire_mots_cles_pertinents(self, resultats: List[Dict], thematique: str) -> List[str]:
         """Extraction des mots-clés vraiment trouvés"""
@@ -471,10 +599,19 @@ class RechercheWeb:
             'type': 'enrichissement_insee'
         })
 
-    def rechercher_entreprise(self, entreprise: Dict) -> Dict:
-        """Recherche complète pour une entreprise"""
-        print(f"  🔍 Recherche: {entreprise['nom']} ({entreprise['commune']})")
+    def rechercher_entreprise(self, entreprise: Dict, logger=None) -> Dict:
+        """Recherche complète avec logging détaillé"""
+        nom_entreprise = entreprise['nom']
         
+        # ✅ VARIABLES DE TRACKING
+        requetes_generees = []
+        moteurs_testes = []
+        moteur_reussi = ""
+        resultats_bruts_count = 0
+        resultats_valides_count = 0
+        erreurs_recherche = []
+        
+        # Votre code de recherche existant...
         resultats = {
             'entreprise': entreprise,
             'timestamp': datetime.now().isoformat(),
@@ -484,33 +621,107 @@ class RechercheWeb:
         }
         
         try:
-            # 1. Vérification du site web officiel
+            # 1. Site web officiel (comme avant)
             if entreprise.get('site_web'):
-                print(f"    📱 Analyse site officiel...")
-                resultats['sources_analysees'].append('site_officiel')
-                donnees_site = self._analyser_site_officiel(entreprise['site_web'])
-                if donnees_site:
-                    resultats['donnees_thematiques']['site_officiel'] = donnees_site
-                    
-            # 2. Recherche web générale
+                # Votre code existant...
+                pass
+                
+            # 2. Recherche web générale AVEC tracking
             print(f"    🌐 Recherche web générale...")
-            resultats['sources_analysees'].append('web_general')
-            donnees_web = self._recherche_web_generale(entreprise)
-            if donnees_web:
-                resultats['donnees_thematiques']['web_general'] = donnees_web
-                
-            # 3. Recherche presse locale
-            print(f"    📰 Recherche presse locale...")
-            resultats['sources_analysees'].append('presse_locale')
-            donnees_presse = self._recherche_presse_locale(entreprise)
-            if donnees_presse:
-                resultats['donnees_thematiques']['presse_locale'] = donnees_presse
-                
-        except Exception as e:
-            resultats['erreurs'].append(f"Erreur recherche: {str(e)}")
-            print(f"    ❌ Erreur: {str(e)}")
             
-        return resultats
+            for thematique in ['recrutements', 'evenements', 'innovations', 'vie_entreprise']:
+                # ✅ GÉNÉRATION REQUÊTES AVEC LOG
+                requetes_thematique = self._construire_requetes_intelligentes(
+                    nom_entreprise, entreprise['commune'], thematique
+                )
+                requetes_generees.extend(requetes_thematique)
+                
+                for requete in requetes_thematique[:1]:  # 1 requête par thématique
+                    # ✅ TEST MOTEURS AVEC TRACKING
+                    resultats_moteur = None
+                    
+                    # Test Bing d'abord
+                    moteurs_testes.append('bing')
+                    try:
+                        print(f"        🔍 Test Bing: {requete}")
+                        resultats_moteur = self._rechercher_bing(requete)
+                        if resultats_moteur:
+                            moteur_reussi = 'bing'
+                            resultats_bruts_count += len(resultats_moteur)
+                            print(f"        ✅ Bing: {len(resultats_moteur)} résultats")
+                    except Exception as e:
+                        erreurs_recherche.append(f"Bing: {str(e)}")
+                        print(f"        ❌ Bing échoué: {e}")
+                    
+                    # Si Bing échoue, test Yandex
+                    if not resultats_moteur:
+                        moteurs_testes.append('yandex')
+                        try:
+                            print(f"        🔍 Test Yandex: {requete}")
+                            resultats_moteur = self._rechercher_yandex(requete)
+                            if resultats_moteur:
+                                moteur_reussi = 'yandex'
+                                resultats_bruts_count += len(resultats_moteur)
+                                print(f"        ✅ Yandex: {len(resultats_moteur)} résultats")
+                        except Exception as e:
+                            erreurs_recherche.append(f"Yandex: {str(e)}")
+                            print(f"        ❌ Yandex échoué: {e}")
+                    
+                    # Si tout échoue, DuckDuckGo
+                    if not resultats_moteur:
+                        moteurs_testes.append('duckduckgo')
+                        try:
+                            print(f"        🔍 Test DuckDuckGo: {requete}")
+                            resultats_moteur = self._rechercher_duckduckgo(requete)
+                            if resultats_moteur:
+                                moteur_reussi = 'duckduckgo'
+                                resultats_bruts_count += len(resultats_moteur)
+                                print(f"        ✅ DuckDuckGo: {len(resultats_moteur)} résultats")
+                        except Exception as e:
+                            erreurs_recherche.append(f"DuckDuckGo: {str(e)}")
+                            print(f"        ❌ DuckDuckGo échoué: {e}")
+                    
+                    # ✅ VALIDATION AVEC COMPTAGE
+                    if resultats_moteur:
+                        resultats_valides = self._valider_pertinence_resultats(
+                            resultats_moteur, nom_entreprise, entreprise['commune'], thematique
+                        )
+                        resultats_valides_count += len(resultats_valides)
+                        
+                        if resultats_valides:
+                            resultats['donnees_thematiques'][thematique] = {
+                                'mots_cles_trouves': [thematique],
+                                'urls': [r['url'] for r in resultats_valides if r.get('url')],
+                                'pertinence': len(resultats_valides) * 0.3,
+                                'extraits_textuels': resultats_valides,
+                                'type': f'recherche_{moteur_reussi}'
+                            }
+                            print(f"        🎯 {len(resultats_valides)} résultats validés pour {thematique}")
+                        else:
+                            print(f"        ⚠️ Aucun résultat valide pour {thematique}")
+                    
+                    time.sleep(2)  # Délai entre requêtes
+            
+            # ✅ LOGGING DES RÉSULTATS DE RECHERCHE
+            if logger:
+                logger.log_recherche_web(
+                    nom_entreprise=nom_entreprise,
+                    requetes=requetes_generees,
+                    moteurs_testes=list(set(moteurs_testes)),  # Dédupliqué
+                    moteur_reussi=moteur_reussi,
+                    nb_bruts=resultats_bruts_count,
+                    nb_valides=resultats_valides_count,
+                    erreurs=erreurs_recherche
+                )
+            
+            return resultats
+            
+        except Exception as e:
+            print(f"    ❌ Erreur recherche générale: {e}")
+            if logger:
+                logger.log_extraction_resultats(nom_entreprise, False, str(e))
+            resultats['erreurs'].append(f"Erreur générale: {str(e)}")
+            return resultats
         
     def _analyser_site_officiel(self, url: str) -> Optional[Dict]:
         """Analyse du site web officiel avec extraction de contenu"""

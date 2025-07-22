@@ -8,7 +8,7 @@ projet:
 
 # Paramètres de traitement
 traitement:
-  echantillon_test: 10
+  echantillon_test: 20
   periode_recherche_mois: 6
   frequence_maj_semaines: 1
   timeout_requetes_sec: 10
@@ -29,17 +29,23 @@ mots_cles:
   evenements:
     - "porte ouverte"
     - "portes ouvertes"
+    - "journée porte ouverte"
+    - "journée portes ouvertes"
     - "conférence"
     - "salon"
     - "forum"
     - "rencontre"
+    - "nous rencontrer"
     - "événement"
     - "manifestation"
     - "colloque"
     - "séminaire"
+    - "découvrir"
+    - "venez découvrir"
     
   recrutements:
     - "recrutement"
+    - "nous recrutons"
     - "embauche"
     - "recrute"
     - "offre emploi"
@@ -51,6 +57,8 @@ mots_cles:
     - "apprentissage"
     - "carrière"
     - "poste"
+    - "cherchons"
+    - "rejoindre notre équipe"
     
   vie_entreprise:
     - "ouverture"
@@ -67,7 +75,11 @@ mots_cles:
     - "rachat"
     
   innovations:
+    - "amélioration"
+    - "modernisation"
     - "innovation"
+    - "développe"
+    - "nouveau"
     - "nouveau produit"
     - "nouveau service"
     - "lancement"

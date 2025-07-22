@@ -19,6 +19,8 @@ from scripts.recherche_web import RechercheWeb
 from scripts.analyseur_thematiques import AnalyseurThematiques
 from scripts.generateur_rapports import GenerateurRapports
 from scripts.integration_linkedin import integrer_linkedin_veille
+from scripts.diagnostic_logger import DiagnosticLogger
+
 
 
 class VeilleEconomique:
@@ -29,6 +31,8 @@ class VeilleEconomique:
         self.config = self._charger_config(config_path)
         self.periode_recherche = timedelta(days=180)  # 6 mois
         self.setup_directories()
+        self.logger = DiagnosticLogger()
+
         
     def setup_directories(self):
         """Création de la structure des dossiers"""
@@ -70,8 +74,9 @@ class VeilleEconomique:
         }
         
     def traiter_echantillon(self, fichier_excel, nb_entreprises=10):
-        """Traitement d'un échantillon d'entreprises avec génération de tous les rapports"""
+        """Traitement d'un échantillon d'entreprises avec logging détaillé"""
         print(f"🚀 Démarrage analyse échantillon ({nb_entreprises} entreprises)")
+        print("🔍 Diagnostic détaillé activé")
         print("=" * 70)
         
         try:
@@ -82,28 +87,48 @@ class VeilleEconomique:
             entreprises = extracteur.extraire_echantillon(nb_entreprises)
             print(f"✅ {len(entreprises)} entreprises extraites avec succès")
             
-            # 2. Recherche web pour chaque entreprise
+            # 2. Recherche web pour chaque entreprise AVEC logging
             print("\n🔍 ÉTAPE 2/5 - RECHERCHE WEB")
             print("-" * 40)
             recherche = RechercheWeb(self.periode_recherche)
             resultats_bruts = []
             
             for i, entreprise in enumerate(entreprises, 1):
-                print(f"\n🏢 Entreprise {i}/{len(entreprises)}: {entreprise['nom']} ({entreprise['commune']})")
-                resultats = recherche.rechercher_entreprise(entreprise)
-                resultats_bruts.append(resultats)
+                # ✅ DÉBUT LOG ENTREPRISE
+                nom_entreprise = self.logger.log_entreprise_debut(entreprise)
                 
-                # Affichage résumé des résultats
-                sources_trouvees = len(resultats.get('donnees_thematiques', {}))
-                print(f"   ✅ {sources_trouvees} sources analysées")
+                print(f"\n🏢 Entreprise {i}/{len(entreprises)}: {nom_entreprise} ({entreprise['commune']})")
                 
+                try:
+                    # Recherche avec logging intégré
+                    resultats = recherche.rechercher_entreprise(entreprise, logger=self.logger)
+                    resultats_bruts.append(resultats)
+                    
+                    # Log du succès d'extraction
+                    sources_trouvees = len(resultats.get('donnees_thematiques', {}))
+                    self.logger.log_extraction_resultats(nom_entreprise, True)
+                    print(f"   ✅ {sources_trouvees} sources analysées")
+                    
+                except Exception as e:
+                    # Log de l'échec
+                    self.logger.log_extraction_resultats(nom_entreprise, False, str(e))
+                    print(f"   ❌ Erreur: {str(e)}")
+                    
+                    # Ajouter un résultat vide pour continuer
+                    resultats_bruts.append({
+                        'entreprise': entreprise,
+                        'donnees_thematiques': {},
+                        'erreurs': [str(e)]
+                    })
+                    continue
+            
             print(f"\n✅ Recherche terminée pour {len(resultats_bruts)} entreprises")
             
-            # 3. Analyse thématique
+            # 3. Analyse thématique AVEC logging
             print("\n🔬 ÉTAPE 3/5 - ANALYSE THÉMATIQUE")
             print("-" * 40)
             analyseur = AnalyseurThematiques(self.config['thematiques'])
-            donnees_enrichies = analyseur.analyser_resultats(resultats_bruts)
+            donnees_enrichies = analyseur.analyser_resultats(resultats_bruts, logger=self.logger)
             
             # Statistiques d'analyse
             entreprises_actives = len([e for e in donnees_enrichies if e.get('score_global', 0) > 0.3])
@@ -129,7 +154,15 @@ class VeilleEconomique:
                 nom_rapport = self._get_nom_rapport(type_rapport)
                 print(f"{emoji} {nom_rapport}")
                 print(f"   📁 {chemin_fichier}")
-                
+            
+            # ✅ GÉNÉRATION DU RAPPORT DE DIAGNOSTIC DÉTAILLÉ
+            print("\n" + "="*80)
+            print("🔍 RAPPORT DE DIAGNOSTIC DÉTAILLÉ")
+            print("="*80)
+            
+            rapport_diagnostic = self.logger.generer_rapport_final()
+            print(rapport_diagnostic)
+            
             # Résumé final
             print("\n✅ ANALYSE TERMINÉE AVEC SUCCÈS!")
             print("=" * 50)
@@ -139,6 +172,18 @@ class VeilleEconomique:
             
         except Exception as e:
             print(f"\n❌ ERREUR LORS DU TRAITEMENT: {str(e)}")
+            print("=" * 50)
+            
+            # ✅ GÉNÉRATION DU RAPPORT DE DIAGNOSTIC MÊME EN CAS D'ERREUR
+            try:
+                if hasattr(self, 'logger'):
+                    print("\n🔍 RAPPORT DE DIAGNOSTIC (ERREUR):")
+                    print("-" * 40)
+                    rapport_diagnostic = self.logger.generer_rapport_final()
+                    print(rapport_diagnostic)
+            except Exception as diag_error:
+                print(f"❌ Impossible de générer le diagnostic: {diag_error}")
+            
             import traceback
             traceback.print_exc()
             return None
