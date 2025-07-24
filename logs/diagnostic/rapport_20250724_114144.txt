@@ -1,0 +1,101 @@
+================================================================================
+🔍 RAPPORT DE DIAGNOSTIC - VEILLE ÉCONOMIQUE
+================================================================================
+
+📊 RÉSUMÉ GÉNÉRAL:
+   ⏰ Durée totale: 0:01:26.373160
+   🏢 Entreprises traitées: 10
+   ✅ Avec résultats: 9
+   ❌ Sans résultats: 0
+
+🔄 STATISTIQUES PAR ÉTAPE:
+📥 Extraction:
+   ✅ Réussies: 10
+   ❌ Échouées: 0
+🔍 Recherche Web:
+   ✅ Réussies: 9
+   ❌ Échouées: 1
+   📊 Requêtes totales: 120
+   📄 Résultats bruts: 200
+   ✅ Résultats valides: 48
+   📈 Taux validation: 24.0%
+🎯 Analyse Thématique:
+   ✅ Réussies: 9
+   ❌ Échouées: 0
+
+🌐 PERFORMANCES MOTEURS DE RECHERCHE:
+   bing: 10 utilisations
+
+🎯 THÉMATIQUES DÉTECTÉES:
+   recrutements: 9 entreprises (90.0%)
+   vie_entreprise: 3 entreprises (30.0%)
+   evenements: 2 entreprises (20.0%)
+   innovations: 2 entreprises (20.0%)
+
+⚠️ PROBLÈMES IDENTIFIÉS:
+   ✅ Aucun problème majeur identifié
+
+🚨 ENTREPRISES PROBLÉMATIQUES:
+   • CAPGEMINI: 0 erreurs
+
+📋 DÉTAIL ÉCHANTILLON ENTREPRISES:
+
+   1. FNAC (Ivry-Sur-Seine)
+      📥 Extraction: ✅
+      🔍 Recherche: ✅
+      🎯 Analyse: ✅
+      📝 Requêtes: 12
+         Exemple: '"FNAC" recrutement...'
+      📊 Résultats: 20 bruts → 4 valides
+      🏆 Score: 1.00
+      🎯 Thématiques: recrutements
+
+   2. MICHELIN (Clermont-Ferrand)
+      📥 Extraction: ✅
+      🔍 Recherche: ✅
+      🎯 Analyse: ✅
+      📝 Requêtes: 12
+         Exemple: '"MICHELIN" recrutement...'
+      📊 Résultats: 20 bruts → 7 valides
+      🏆 Score: 0.90
+      🎯 Thématiques: recrutements, evenements, vie_entreprise
+
+   3. SANOFI (Gentilly)
+      📥 Extraction: ✅
+      🔍 Recherche: ✅
+      🎯 Analyse: ✅
+      📝 Requêtes: 12
+         Exemple: '"SANOFI" recrutement...'
+      📊 Résultats: 20 bruts → 5 valides
+      🏆 Score: 1.00
+      🎯 Thématiques: recrutements
+
+   4. CARREFOUR (Boulogne-Billancourt)
+      📥 Extraction: ✅
+      🔍 Recherche: ✅
+      🎯 Analyse: ✅
+      📝 Requêtes: 12
+         Exemple: '"CARREFOUR" recrutement...'
+      📊 Résultats: 20 bruts → 5 valides
+      🏆 Score: 1.00
+      🎯 Thématiques: recrutements
+
+   5. THALES (Neuilly-Sur-Seine)
+      📥 Extraction: ✅
+      🔍 Recherche: ✅
+      🎯 Analyse: ✅
+      📝 Requêtes: 12
+         Exemple: '"THALES" recrutement...'
+      📊 Résultats: 20 bruts → 3 valides
+      🏆 Score: 0.70
+      🎯 Thématiques: recrutements, vie_entreprise, innovations
+
+💡 RECOMMANDATIONS:
+   🤔 ÉLEVÉ: Possibles faux positifs
+      → Vérifiez manuellement quelques résultats
+      → Renforcez la validation de pertinence
+      → Analysez les scores 1.0 (suspects)
+
+================================================================================
+📄 Log détaillé sauvegardé dans: logs/diagnostic/
+================================================================================

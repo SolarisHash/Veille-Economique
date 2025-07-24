@@ -1018,7 +1018,383 @@ class RechercheWeb:
             resultats_valides.append(resultat)
         
         return resultats_valides[:3]  # Top 3 résultats
+
+    def _valider_pertinence_resultats(self, resultats: List[Dict], nom_entreprise: str, commune: str, thematique: str) -> List[Dict]:
+        """
+        ✅ VALIDATION STRICTE : S'assurer que les résultats parlent VRAIMENT de l'entreprise
+        """
+        resultats_valides = []
+        
+        if not resultats:
+            return resultats_valides
+        
+        print(f"        🔍 Validation STRICTE de {len(resultats)} résultats pour {nom_entreprise}")
+        
+        # ✅ PRÉPARATION DES CRITÈRES DE VALIDATION STRICTS
+        
+        # 1. Nettoyage du nom d'entreprise
+        nom_clean = nom_entreprise.upper().strip()
+        mots_entreprise = [mot for mot in nom_clean.split() if len(mot) > 2]
+        
+        # 2. Exclusion des entreprises non-recherchables
+        mots_exclus = ['MADAME', 'MONSIEUR', 'MADEMOISELLE', 'M.', 'MME', 'MLLE']
+        mots_entreprise_utiles = [mot for mot in mots_entreprise if mot not in mots_exclus]
+        
+        if len(mots_entreprise_utiles) == 0:
+            print(f"        ⚠️ Entreprise non-recherchable: {nom_entreprise}")
+            return []
+        
+        print(f"        📝 Mots-clés entreprise: {mots_entreprise_utiles}")
+        
+        commune_lower = commune.lower() if commune else ""
+        mots_thematiques = self.thematiques_mots_cles.get(thematique, [])
+        
+        for i, resultat in enumerate(resultats):
+            try:
+                titre = resultat.get('titre', '').upper()
+                description = resultat.get('description', '').upper()
+                url = resultat.get('url', '').upper()
+                
+                texte_complet = f"{titre} {description} {url}"
+                
+                # ✅ VALIDATION STRICTE NIVEAU 1: L'entreprise doit être mentionnée
+                mots_entreprise_trouves = [mot for mot in mots_entreprise_utiles if mot in texte_complet]
+                score_entreprise = len(mots_entreprise_trouves) / len(mots_entreprise_utiles)
+                
+                print(f"          📊 Résultat {i+1}: Mots entreprise trouvés: {mots_entreprise_trouves}")
+                print(f"             Score entreprise: {score_entreprise:.2f}")
+                
+                # ✅ SEUIL STRICT: Au moins 70% des mots de l'entreprise doivent être présents
+                if score_entreprise < 0.7:
+                    print(f"             ❌ Rejeté: Score entreprise trop faible ({score_entreprise:.2f} < 0.7)")
+                    continue
+                
+                # ✅ VALIDATION NIVEAU 2: Vérification anti-faux positifs
+                
+                # Exclusion des sites génériques qui ne parlent pas vraiment de l'entreprise
+                exclusions_strictes = [
+                    'wikipedia.org', 'wiktionary.org', 'dictionnaire', 'definition',
+                    'traduction', 'translation', 'grammar', 'linguistique',
+                    'forum.wordreference.com', 'reverso.net', 'larousse.fr',
+                    'conjugaison', 'synonyme', 'antonyme', 'etymologie',
+                    'cours de français', 'leçon', 'exercice', 'grammaire'
+                ]
+                
+                texte_complet_lower = texte_complet.lower()
+                if any(exclusion in texte_complet_lower for exclusion in exclusions_strictes):
+                    print(f"             ❌ Rejeté: Contenu générique détecté")
+                    continue
+                
+                # ✅ VALIDATION NIVEAU 3: Le contenu doit être pertinent pour une entreprise
+                
+                # Indicateurs de contenu entrepreneurial
+                indicateurs_entreprise = [
+                    'entreprise', 'société', 'company', 'business', 'service', 'activité',
+                    'commercial', 'professionnel', 'secteur', 'industrie', 'économique',
+                    'emploi', 'travail', 'bureau', 'siège', 'établissement'
+                ]
+                
+                indicateurs_trouves = [ind for ind in indicateurs_entreprise if ind in texte_complet_lower]
+                
+                if len(indicateurs_trouves) == 0:
+                    print(f"             ❌ Rejeté: Aucun indicateur entrepreneurial")
+                    continue
+                
+                # ✅ VALIDATION NIVEAU 4: Vérification géographique si possible
+                score_geo = 0.3  # Score par défaut
+                if commune_lower and commune_lower in texte_complet_lower:
+                    score_geo = 0.5
+                    print(f"             ✅ Bonus géographique: {commune} mentionnée")
+                
+                # ✅ VALIDATION NIVEAU 5: Pertinence thématique
+                mots_thematiques_trouves = [mot for mot in mots_thematiques if mot.lower() in texte_complet_lower]
+                score_thematique = min(len(mots_thematiques_trouves) * 0.2, 0.4)
+                
+                # ✅ CALCUL DU SCORE FINAL AVEC VALIDATION STRICTE
+                score_final = (score_entreprise * 0.6) + score_geo + score_thematique
+                
+                # ✅ SEUIL FINAL ÉLEVÉ pour garantir la pertinence
+                SEUIL_STRICT = 0.8  # Seuil élevé pour éviter les faux positifs
+                
+                if score_final >= SEUIL_STRICT:
+                    # Ajout des métadonnées de validation
+                    resultat_valide = resultat.copy()
+                    resultat_valide.update({
+                        'score_validation': score_final,
+                        'score_entreprise': score_entreprise,
+                        'mots_entreprise_trouves': mots_entreprise_trouves,
+                        'mots_thematiques_trouves': mots_thematiques_trouves,
+                        'indicateurs_entreprise': indicateurs_trouves,
+                        'validation_stricte': True,
+                        'validation_details': {
+                            'entreprise': score_entreprise,
+                            'geographique': score_geo,
+                            'thematique': score_thematique,
+                            'final': score_final
+                        }
+                    })
+                    
+                    resultats_valides.append(resultat_valide)
+                    print(f"             ✅ VALIDÉ (score: {score_final:.2f}) - Parle vraiment de l'entreprise")
+                else:
+                    print(f"             ❌ Rejeté: Score final trop faible ({score_final:.2f} < {SEUIL_STRICT})")
+                    
+            except Exception as e:
+                print(f"          ⚠️ Erreur validation résultat {i+1}: {e}")
+                continue
+        
+        print(f"        📊 Validation STRICTE terminée: {len(resultats_valides)}/{len(resultats)} résultats VRAIMENT pertinents")
+        
+        return resultats_valides
+
+
+    def _valider_resultats_entreprise_specifique(self, resultats: List[Dict], nom_entreprise: str) -> List[Dict]:
+        """
+        ✅ VALIDATION SPÉCIFIQUE pour s'assurer que les résultats parlent vraiment de l'entreprise
+        """
+        if not resultats or not nom_entreprise:
+            return []
+        
+        # Nettoyage du nom d'entreprise pour la recherche
+        nom_clean = nom_entreprise.upper().strip()
+        
+        # Cas particulier : entreprises non-diffusibles
+        if 'NON-DIFFUSIBLE' in nom_clean or 'INFORMATION NON' in nom_clean:
+            print(f"        ⚠️ Entreprise non recherchable: {nom_entreprise}")
+            return []
+        
+        resultats_cibles = []
+        mots_entreprise = [mot for mot in nom_clean.split() if len(mot) > 2]
+        
+        if not mots_entreprise:
+            print(f"        ⚠️ Aucun mot significatif dans: {nom_entreprise}")
+            return []
+        
+        for resultat in resultats:
+            titre = resultat.get('titre', '').upper()
+            description = resultat.get('description', '').upper()
+            
+            texte_complet = f"{titre} {description}"
+            
+            # Comptage des mots de l'entreprise trouvés
+            mots_trouves = [mot for mot in mots_entreprise if mot in texte_complet]
+            
+            # Seuil : au moins 50% des mots de l'entreprise doivent être présents
+            if len(mots_trouves) >= len(mots_entreprise) * 0.5:
+                resultat['entreprise_match_score'] = len(mots_trouves) / len(mots_entreprise)
+                resultat['mots_entreprise_trouves'] = mots_trouves
+                resultats_cibles.append(resultat)
+            
+        print(f"        🎯 Ciblage entreprise: {len(resultats_cibles)}/{len(resultats)} résultats ciblés")
+        return resultats_cibles
+
+
+    def _detecter_entreprises_recherchables(self, entreprises: List[Dict]) -> List[Dict]:
+        """
+        ✅ FILTRE préalable pour identifier les entreprises vraiment recherchables
+        """
+        entreprises_recherchables = []
+        
+        for entreprise in entreprises:
+            nom = entreprise.get('nom', '').upper().strip()
+            
+            # Critères d'exclusion
+            if any(terme in nom for terme in [
+                'INFORMATION NON-DIFFUSIBLE',
+                'NON-DIFFUSIBLE', 
+                'CONFIDENTIEL',
+                'ANONYME'
+            ]):
+                print(f"❌ Exclu (non-diffusible): {nom}")
+                continue
+            
+            # Critères d'inclusion
+            if len(nom) >= 3 and nom not in ['N/A', '', 'INCONNU']:
+                # Vérification qu'il y a au moins un mot significatif
+                mots_significatifs = [mot for mot in nom.split() if len(mot) > 2]
+                if len(mots_significatifs) >= 1:
+                    entreprises_recherchables.append(entreprise)
+                    print(f"✅ Recherchable: {nom}")
+                else:
+                    print(f"⚠️ Nom trop générique: {nom}")
+            else:
+                print(f"❌ Nom trop court: {nom}")
+        
+        return entreprises_recherchables
     
+    def _detecter_entreprises_non_recherchables(self, entreprises: List[Dict]) -> List[Dict]:
+        """
+        ✅ NOUVEAU: Détection des entreprises qui ne peuvent pas être recherchées efficacement
+        """
+        entreprises_recherchables = []
+        entreprises_problematiques = []
+        
+        print("🔍 DÉTECTION DES ENTREPRISES RECHERCHABLES")
+        print("-" * 50)
+        
+        for entreprise in entreprises:
+            nom = entreprise.get('nom', '').upper().strip()
+            
+            # Critères de non-recherchabilité
+            problematique = False
+            raisons = []
+            
+            # 1. Noms anonymisés ou confidentiels
+            if any(terme in nom for terme in [
+                'INFORMATION NON-DIFFUSIBLE', 'NON-DIFFUSIBLE', 
+                'CONFIDENTIEL', 'ANONYME', 'N/A'
+            ]):
+                problematique = True
+                raisons.append("Nom anonymisé/confidentiel")
+            
+            # 2. Noms de personnes physiques uniquement
+            prefixes_personne = ['MADAME', 'MONSIEUR', 'MADEMOISELLE', 'M.', 'MME', 'MLLE']
+            if any(nom.startswith(prefix) for prefix in prefixes_personne):
+                # Vérifier s'il y a un nom d'entreprise après
+                mots = [mot for mot in nom.split() if mot not in prefixes_personne]
+                if len(mots) <= 2:  # Juste prénom + nom
+                    problematique = True
+                    raisons.append("Personne physique sans raison sociale")
+            
+            # 3. Noms trop courts ou génériques
+            mots_significatifs = [mot for mot in nom.split() if len(mot) > 2]
+            if len(mots_significatifs) < 1:
+                problematique = True
+                raisons.append("Nom trop court/générique")
+            
+            # 4. Secteur d'activité qui indique une personne physique
+            secteur = entreprise.get('secteur_naf', '').lower()
+            if any(terme in secteur for terme in [
+                'activités des ménages', 'services domestiques', 
+                'activités indifférenciées', 'autre'
+            ]):
+                problematique = True
+                raisons.append("Secteur individuel")
+            
+            # Classification
+            if problematique:
+                entreprises_problematiques.append({
+                    'entreprise': entreprise,
+                    'raisons': raisons
+                })
+                print(f"❌ {nom[:30]}... → {', '.join(raisons)}")
+            else:
+                entreprises_recherchables.append(entreprise)
+                print(f"✅ {nom[:30]}... → Recherchable")
+        
+        print(f"\n📊 RÉSULTAT:")
+        print(f"   ✅ Entreprises recherchables: {len(entreprises_recherchables)}")
+        print(f"   ❌ Entreprises problématiques: {len(entreprises_problematiques)}")
+        
+        if len(entreprises_problematiques) > 0:
+            print(f"\n⚠️ ENTREPRISES PROBLÉMATIQUES DÉTECTÉES:")
+            for item in entreprises_problematiques[:5]:
+                ent = item['entreprise']
+                print(f"   • {ent['nom'][:40]}... ({ent['commune']})")
+                print(f"     Raisons: {', '.join(item['raisons'])}")
+            
+            if len(entreprises_problematiques) > 5:
+                print(f"   ... et {len(entreprises_problematiques) - 5} autres")
+        
+        return entreprises_recherchables
+
+    def _generer_requetes_adaptees(self, nom_entreprise: str, commune: str, thematique: str) -> List[str]:
+        """
+        ✅ AMÉLIORATION: Génération de requêtes adaptées au type d'entreprise
+        """
+        requetes = []
+        
+        # Analyse du type d'entreprise
+        nom_upper = nom_entreprise.upper()
+        
+        # Type 1: Personne physique avec activité professionnelle
+        if any(nom_upper.startswith(prefix) for prefix in ['MADAME', 'MONSIEUR', 'M.', 'MME']):
+            # Pour les personnes physiques, rechercher par nom + commune + secteur
+            nom_sans_civilite = nom_entreprise
+            for prefix in ['MADAME ', 'MONSIEUR ', 'M. ', 'MME ', 'MLLE ']:
+                nom_sans_civilite = nom_sans_civilite.replace(prefix, '')
+            
+            requetes.extend([
+                f'{nom_sans_civilite} {commune} professionnel',
+                f'{nom_sans_civilite} {commune} {thematique}',
+                f'{commune} {nom_sans_civilite.split()[0]} {thematique}'  # Juste le nom de famille
+            ])
+        
+        # Type 2: Entreprise avec raison sociale
+        else:
+            # Nettoyage du nom d'entreprise
+            nom_clean = nom_entreprise.replace('"', '').replace("'", "")
+            
+            # Requêtes classiques pour les vraies entreprises
+            if len(nom_clean) < 40:  # Nom pas trop long
+                requetes.extend([
+                    f'"{nom_clean}" {thematique}',
+                    f'"{nom_clean}" {commune} {thematique}',
+                    f'{nom_clean} {commune} entreprise {thematique}'
+                ])
+            else:
+                # Nom trop long, utiliser les mots-clés principaux
+                mots_importants = [mot for mot in nom_clean.split() if len(mot) > 3][:3]
+                if mots_importants:
+                    requetes.extend([
+                        f'{" ".join(mots_importants)} {commune} {thematique}',
+                        f'{mots_importants[0]} {commune} {thematique}'
+                    ])
+        
+        # Limitation et nettoyage
+        requetes_finales = [req for req in requetes if len(req) > 10 and len(req) < 100]
+        
+        return requetes_finales[:3]  # Maximum 3 requêtes
+
+    # ✅ MÉTHODE PRINCIPALE À AJOUTER DANS VOTRE CLASSE VeilleEconomique
+    def traiter_echantillon_avec_validation_stricte(self, fichier_excel, nb_entreprises=20):
+        """
+        ✅ NOUVEAU: Traitement avec validation stricte pour éviter les faux positifs
+        """
+        print("🚀 TRAITEMENT AVEC VALIDATION STRICTE")
+        print("=" * 60)
+        
+        try:
+            # 1. Extraction normale
+            extracteur = ExtracteurDonnees(fichier_excel)
+            toutes_entreprises = extracteur.extraire_echantillon(nb_entreprises * 2)  # Plus large pour compenser
+            
+            # 2. ✅ NOUVEAU: Filtrage des entreprises recherchables
+            entreprises_recherchables = self._detecter_entreprises_non_recherchables(toutes_entreprises)
+            
+            # Limitation au nombre demandé
+            entreprises = entreprises_recherchables[:nb_entreprises]
+            
+            if len(entreprises) < nb_entreprises:
+                print(f"⚠️ Seulement {len(entreprises)} entreprises recherchables disponibles")
+            
+            # 3. Recherche web avec validation stricte (votre code existant mais avec la méthode corrigée)
+            recherche = RechercheWeb(self.periode_recherche)
+            
+            # ✅ REMPLACEMENT: Utiliser la validation stricte
+            recherche._valider_pertinence_resultats = self._valider_pertinence_resultats
+            recherche._generer_requetes_adaptees = self._generer_requetes_adaptees
+            
+            resultats_bruts = []
+            
+            for entreprise in entreprises:
+                resultats = recherche.rechercher_entreprise(entreprise)
+                resultats_bruts.append(resultats)
+            
+            # 4. Analyse thématique (inchangée)
+            analyseur = AnalyseurThematiques(self.config['thematiques'])
+            donnees_enrichies = analyseur.analyser_resultats(resultats_bruts)
+            
+            # 5. Génération des rapports (inchangée)
+            generateur = GenerateurRapports()
+            rapports = generateur.generer_tous_rapports(donnees_enrichies)
+            
+            return rapports
+            
+        except Exception as e:
+            print(f"❌ Erreur traitement strict: {e}")
+            return None
+
     def _enrichir_donnees_insee(self, commune: str, secteur_naf: str, thematique: str) -> List[Dict]:
         """Enrichissement avec données contextuelles INSEE"""
         try:

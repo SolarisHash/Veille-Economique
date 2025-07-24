@@ -1,169 +1,115 @@
-# Configuration du système de veille économique territoriale
+# Configuration optimisée pour améliorer le taux de détection
 
-# Paramètres généraux
-projet:
-  nom: "Veille Économique Territoriale"
-  version: "1.0.0"
-  description: "Système automatisé de veille économique pour 20 communes"
-
-# Paramètres de traitement
+# Paramètres de traitement - ASSOUPLIS
 traitement:
   echantillon_test: 20
-  periode_recherche_mois: 6
-  frequence_maj_semaines: 1
-  timeout_requetes_sec: 10
-  delai_entre_requetes_sec: 1
+  periode_recherche_mois: 12  # Élargi à 12 mois
+  timeout_requetes_sec: 15    # Augmenté pour plus de stabilité
+  delai_entre_requetes_sec: 3 # Augmenté pour éviter les blocages
+  seuil_validation_minimum: 0.2  # RÉDUIT de 0.3 à 0.2
 
-# Thématiques de recherche
-thematiques:
-  - evenements
-  - recrutements
-  - vie_entreprise
-  - innovations
-  - exportations
-  - aides_subventions
-  - fondation_sponsor
+# Paramètres de scoring - PLUS PERMISSIFS
+scoring:
+  seuil_pertinence_minimum: 0.2  # RÉDUIT
+  poids_source_officielle: 1.0
+  poids_presse_locale: 0.9       # AUGMENTÉ
+  poids_web_general: 0.7         # AUGMENTÉ
+  bonus_recence: 0.3             # AUGMENTÉ
+  bonus_source_multiple: 0.2     # AUGMENTÉ
 
-# Mots-clés par thématique
+# Mots-clés ENRICHIS pour meilleure détection
 mots_cles:
-  evenements:
-    - "porte ouverte"
-    - "portes ouvertes"
-    - "journée porte ouverte"
-    - "journée portes ouvertes"
-    - "conférence"
-    - "salon"
-    - "forum"
-    - "rencontre"
-    - "nous rencontrer"
-    - "événement"
-    - "manifestation"
-    - "colloque"
-    - "séminaire"
-    - "découvrir"
-    - "venez découvrir"
-    
   recrutements:
     - "recrutement"
-    - "nous recrutons"
-    - "embauche"
     - "recrute"
+    - "embauche"
     - "offre emploi"
     - "offres emploi"
     - "CDI"
-    - "CDD"
+    - "CDD" 
     - "stage"
     - "alternance"
     - "apprentissage"
     - "carrière"
     - "poste"
-    - "cherchons"
-    - "rejoindre notre équipe"
+    - "candidature"
+    - "nous recherchons"
+    - "rejoindre équipe"
+    - "opportunité"
     
-  vie_entreprise:
-    - "ouverture"
-    - "fermeture"
-    - "déménagement"
-    - "implantation"
-    - "développement"
-    - "expansion"
-    - "partenariat"
-    - "collaboration"
-    - "fusion"
-    - "acquisition"
-    - "restructuration"
-    - "rachat"
+  evenements:
+    - "événement"
+    - "événements"
+    - "porte ouverte"
+    - "portes ouvertes"
+    - "journée porte ouverte"
+    - "conférence"
+    - "salon"
+    - "forum"
+    - "rencontre"
+    - "manifestation"
+    - "colloque"
+    - "séminaire"
+    - "présentation"
+    - "démonstration"
+    - "inauguration"
     
   innovations:
-    - "amélioration"
-    - "modernisation"
     - "innovation"
-    - "développe"
     - "nouveau"
     - "nouveau produit"
     - "nouveau service"
     - "lancement"
-    - "brevets"
     - "R&D"
     - "recherche développement"
     - "technologie"
-    - "prototype"
     - "modernisation"
+    - "amélioration"
+    - "développement"
+    - "créativité"
+    - "avancée"
+    - "progrès"
     
-  exportations:
-    - "export"
-    - "exportation"
-    - "international"
-    - "étranger"
-    - "marché international"
-    - "contrat export"
-    - "développement international"
-    - "commerce extérieur"
-    
-  aides_subventions:
-    - "subvention"
-    - "aide"
-    - "financement"
-    - "soutien"
-    - "crédit"
-    - "subventionné"
-    - "aidé"
-    - "prêt"
-    - "investissement public"
-    - "dispositif d'aide"
-    
-  fondation_sponsor:
-    - "fondation"
-    - "sponsor"
-    - "sponsoring"
-    - "mécénat"
-    - "partenaire"
-    - "soutien"
-    - "dons"
-    - "charitable"
-    - "solidarité"
-    - "engagement social"
+  vie_entreprise:
+    - "développement"
+    - "expansion"
+    - "croissance"
+    - "partenariat"
+    - "collaboration"
+    - "implantation"
+    - "ouverture"
+    - "installation"
+    - "projet"
+    - "investissement"
+    - "stratégie"
+    - "évolution"
+    - "transformation"
 
-# Sources de données
-sources:
+# Stratégies de recherche MULTIPLES
+strategies_recherche:
   prioritaires:
-    - "site_officiel"
-    - "presse_locale"
-    - "communiques_officiels"
+    - "nom_exact_thematique"      # "Entreprise XYZ" recrutement
+    - "nom_commune_thematique"    # "Entreprise XYZ" Ville emploi
+    - "mots_cles_commune"         # Mots-clés Ville secteur
     
-  secondaires:
-    - "reseaux_sociaux"
-    - "annuaires_professionnels"
-    - "sites_institutionnels"
+  fallback:
+    - "secteur_commune_thematique" # Secteur Ville thématique
+    - "commune_thematique_generale" # Ville thématique générale
 
-# Paramètres de scoring
-scoring:
-  poids_source_officielle: 1.0
-  poids_presse_locale: 0.8
-  poids_web_general: 0.6
-  poids_reseaux_sociaux: 0.4
+# Paramètres validation ASSOUPLIS
+validation:
+  score_entreprise_minimum: 0.3  # RÉDUIT de 0.5 à 0.3
+  score_commune_bonus: 0.2       # Bonus si commune mentionnée
+  score_thematique_minimum: 0.1  # RÉDUIT
+  exclusions_strictes: false     # ASSOUPLI
   
-  seuil_pertinence_minimum: 0.3
-  bonus_recence: 0.2
-  bonus_source_multiple: 0.1
-
-# Paramètres de cache
-cache:
-  duree_validite_heures: 24
-  taille_max_mb: 100
-  nettoyage_auto: true
-
-# Paramètres export
-export:
-  format_principal: "xlsx"
-  formats_secondaires: ["csv", "json"]
-  generer_rapport_html: true
-  inclure_sources: true
-  inclure_extraits: true
-
-# Logging
-logging:
-  niveau: "INFO"
-  fichier: "logs/veille_economique.log"
-  rotation: true
-  taille_max_mb: 10
+# Sources autorisées ÉLARGIES
+sources_autorisees:
+  sites_entreprise: true
+  presse_locale: true
+  presse_nationale: true
+  sites_institutionnels: true
+  portails_emploi: true
+  sites_sectoriels: true
+  reseaux_sociaux: true          # AJOUTÉ
+  forums_professionnels: false   # Gardé à false pour qualité
