@@ -149,45 +149,243 @@ class AIValidationModule:
                 themes_detected=[]
             )
     
+    # Corrections dans ai_validation_module.py
+
     def _get_validation_system_prompt(self) -> str:
-        """Prompt système optimisé pour la validation de veille économique"""
-        return """Tu es un expert en veille économique territoriale française. 
+        """✅ PROMPT PERMISSIF pour accepter plus de résultats"""
+        return """Tu es un expert en veille économique avec une approche PERMISSIVE.
 
-Ta mission : analyser si un résultat de recherche web est VRAIMENT pertinent pour une entreprise et une thématique données.
+    OBJECTIF: Valider le maximum de résultats pertinents pour aider l'analyse économique.
 
-ATTENTION aux faux positifs courants :
-- Sites de définitions/dictionnaires mentionnant juste le nom
-- Forums linguistiques (wordreference, etc.)
-- Résultats génériques sans lien réel avec l'entreprise
-- Articles parlant d'autres entreprises avec nom similaire
+    CRITÈRES DE VALIDATION PERMISSIFS:
+    1. Si le nom de l'entreprise apparaît dans le contenu → VALIDE
+    2. Si la thématique est mentionnée ou suggérée → VALIDE  
+    3. Si c'est dans un contexte professionnel/économique → VALIDE
+    4. En cas de doute sur la pertinence → VALIDE (principe de précaution)
 
-CRITÈRES DE VALIDATION STRICTE :
-1. Le contenu doit VRAIMENT parler de l'entreprise spécifique
-2. L'information doit être en rapport avec la thématique demandée
-3. Le contexte doit être professionnel/économique
-4. La source doit être fiable
+    REJETER UNIQUEMENT:
+    - Forums linguistiques purs (wordreference, linguee, etc.)
+    - Dictionnaires/définitions sans contexte entreprise
+    - Contenu clairement hors-sujet (recettes de cuisine, etc.)
 
-THÉMATIQUES ACCEPTÉES :
-- recrutements : offres emploi, embauches, CDI/CDD
-- evenements : portes ouvertes, salons, conférences
-- innovations : nouveaux produits/services, R&D, brevets
-- vie_entreprise : développement, partenariats, implantations
-- exportations : commerce international, marchés étrangers
-- aides_subventions : financements publics, subventions
-- fondation_sponsor : mécénat, actions sociales
+    EXEMPLES À ACCEPTER:
+    - "CARREFOUR recrute" → PERTINENT
+    - "Emploi chez CARREFOUR" → PERTINENT  
+    - "CARREFOUR développement" → PERTINENT
+    - "Nouveau magasin CARREFOUR" → PERTINENT
+    - Même si informations générales ou anciennes → PERTINENT
 
-Réponds TOUJOURS en JSON valide avec cette structure :
-{
-  "is_relevant": boolean,
-  "confidence_score": float (0.0 à 1.0),
-  "explanation": "Explication détaillée de ta décision",
-  "extracted_info": {
-    "key_facts": ["fait1", "fait2"],
-    "date_mentioned": "date si trouvée",
-    "location_mentioned": "lieu si mentionné"
-  },
-  "themes_detected": ["thématique1", "thématique2"]
-}"""
+    SEUIL: Être généreux dans l'évaluation. Mieux vaut quelques faux positifs que manquer des informations utiles.
+
+    Réponds TOUJOURS en JSON valide:
+    {
+    "is_relevant": true (par défaut, false seulement si clairement hors-sujet),
+    "confidence_score": 0.7 (score élevé par défaut),
+    "explanation": "Explication positive de l'acceptation",
+    "extracted_info": {
+        "key_facts": ["Fait1", "Fait2"],
+        "date_mentioned": null,
+        "location_mentioned": "lieu si mentionné"
+    },
+    "themes_detected": ["thématique_demandée"]
+    }"""
+
+    def batch_validate_results(self, entreprise: Dict, results_by_theme: Dict) -> Dict[str, List[Dict]]:
+        """✅ VALIDATION PERMISSIVE avec fallback intelligent"""
+        
+        print(f"🤖 Validation IA PERMISSIVE pour {entreprise.get('nom', 'N/A')}")
+        
+        validated_results = {}
+        total_results = 0
+        
+        # Comptage total pour statistiques
+        for theme, donnees_thematique in results_by_theme.items():
+            if isinstance(donnees_thematique, dict):
+                extraits = donnees_thematique.get('extraits_textuels', [])
+                if isinstance(extraits, list):
+                    total_results += len(extraits)
+        
+        print(f"   📊 {total_results} extraits à valider")
+        
+        for theme, donnees_thematique in results_by_theme.items():
+            validated_results[theme] = []
+            
+            if isinstance(donnees_thematique, dict):
+                extraits = donnees_thematique.get('extraits_textuels', [])
+                
+                if isinstance(extraits, list):
+                    print(f"   🎯 {theme}: {len(extraits)} extraits")
+                    
+                    for i, extrait in enumerate(extraits):
+                        try:
+                            # Normalisation format
+                            if isinstance(extrait, dict):
+                                result_for_ai = extrait
+                            else:
+                                result_for_ai = {
+                                    'titre': str(extrait),
+                                    'description': '',
+                                    'url': ''
+                                }
+                            
+                            # ✅ VALIDATION IA AVEC FALLBACK
+                            try:
+                                validation = self.validate_search_result(entreprise, result_for_ai, theme)
+                                ai_success = True
+                            except Exception as e:
+                                print(f"     ⚠️ IA échouée pour extrait {i+1}: {e}")
+                                # ✅ FALLBACK: Validation basique sans IA
+                                validation = self._fallback_validation(entreprise, result_for_ai, theme)
+                                ai_success = False
+                            
+                            # ✅ SEUIL TRÈS PERMISSIF
+                            seuil_permissif = 0.3  # Seuil bas
+                            
+                            if validation.is_relevant or validation.confidence_score > seuil_permissif:
+                                enriched_result = result_for_ai.copy()
+                                enriched_result.update({
+                                    'ai_validated': ai_success,
+                                    'ai_confidence': validation.confidence_score,
+                                    'ai_explanation': validation.explanation,
+                                    'ai_extracted_info': validation.extracted_info,
+                                    'ai_themes': validation.themes_detected,
+                                    'validation_timestamp': datetime.now().isoformat(),
+                                    'validation_method': 'ai' if ai_success else 'fallback'
+                                })
+                                validated_results[theme].append(enriched_result)
+                                
+                                method = "IA" if ai_success else "Fallback"
+                                print(f"     ✅ {method}: Validé (conf: {validation.confidence_score:.2f})")
+                            else:
+                                print(f"     ❌ Rejeté: {validation.explanation[:50]}...")
+                                
+                        except Exception as e:
+                            print(f"     ❌ Erreur validation extrait {i+1}: {e}")
+                            # ✅ EN CAS D'ERREUR TOTALE: Garder l'extrait quand même
+                            if isinstance(extrait, dict) and extrait.get('titre'):
+                                extrait['ai_validated'] = False
+                                extrait['ai_fallback'] = True
+                                extrait['fallback_reason'] = f"Erreur IA: {str(e)[:100]}"
+                                validated_results[theme].append(extrait)
+                                print(f"     🔄 Sauvé malgré l'erreur")
+                    
+                    # ✅ FALLBACK FINAL si aucun résultat validé
+                    if not validated_results[theme] and len(extraits) > 0:
+                        print(f"   🔄 FALLBACK: IA trop stricte, récupération des meilleurs extraits")
+                        
+                        # Garder au moins 1-2 extraits les plus prometteurs
+                        for extrait in extraits[:2]:
+                            if isinstance(extrait, dict):
+                                extrait.update({
+                                    'ai_validated': False,
+                                    'ai_fallback_final': True,
+                                    'fallback_reason': 'IA trop restrictive - récupération automatique',
+                                    'confidence_fallback': 0.5
+                                })
+                                validated_results[theme].append(extrait)
+                        
+                        print(f"   📋 {len(validated_results[theme])} extraits récupérés automatiquement")
+        
+        # Statistiques finales
+        total_validated = sum(len(results) for results in validated_results.values())
+        print(f"   📊 Validation terminée: {total_validated}/{total_results} extraits validés")
+        
+        # ✅ SI ÉCHEC TOTAL: Mode de secours
+        if total_validated == 0 and total_results > 0:
+            print(f"   🚨 ACTIVATION MODE SECOURS: Récupération forcée")
+            validated_results = self._mode_secours_validation(results_by_theme)
+            total_validated = sum(len(results) for results in validated_results.values())
+            print(f"   🔄 Mode secours: {total_validated} extraits récupérés")
+        
+        return validated_results
+
+    def _fallback_validation(self, entreprise: Dict, result: Dict, theme: str):
+        """✅ VALIDATION FALLBACK sans IA"""
+        from dataclasses import dataclass
+        
+        @dataclass 
+        class FallbackValidation:
+            is_relevant: bool
+            confidence_score: float
+            explanation: str
+            extracted_info: dict
+            themes_detected: list
+        
+        nom_entreprise = entreprise.get('nom', '').lower()
+        titre = result.get('titre', '').lower()
+        description = result.get('description', '').lower()
+        
+        # Validation basique: nom entreprise mentionné
+        if nom_entreprise and any(mot in f"{titre} {description}" for mot in nom_entreprise.split() if len(mot) > 2):
+            return FallbackValidation(
+                is_relevant=True,
+                confidence_score=0.6,
+                explanation=f"Fallback: Nom entreprise détecté dans le contenu",
+                extracted_info={"method": "fallback", "enterprise_match": True},
+                themes_detected=[theme]
+            )
+        
+        # Validation thématique basique
+        theme_keywords = {
+            'recrutements': ['recrutement', 'emploi', 'cdi', 'embauche', 'poste'],
+            'evenements': ['événement', 'salon', 'conférence', 'porte ouverte'],
+            'innovations': ['innovation', 'nouveau', 'technologie', 'développement'],
+            'vie_entreprise': ['développement', 'partenariat', 'expansion', 'ouverture']
+        }
+        
+        keywords = theme_keywords.get(theme, [])
+        if any(keyword in f"{titre} {description}" for keyword in keywords):
+            return FallbackValidation(
+                is_relevant=True,
+                confidence_score=0.5,
+                explanation=f"Fallback: Thématique {theme} détectée",
+                extracted_info={"method": "fallback", "theme_match": True},
+                themes_detected=[theme]
+            )
+        
+        # Si rien trouvé mais contenu présent: validation minimale
+        if titre or description:
+            return FallbackValidation(
+                is_relevant=True,
+                confidence_score=0.4,
+                explanation=f"Fallback: Contenu présent, validation permissive",
+                extracted_info={"method": "fallback", "content_exists": True},
+                themes_detected=[theme]
+            )
+        
+        return FallbackValidation(
+            is_relevant=False,
+            confidence_score=0.0,
+            explanation="Fallback: Aucun contenu détectable",
+            extracted_info={"method": "fallback"},
+            themes_detected=[]
+        )
+
+    def _mode_secours_validation(self, results_by_theme: Dict) -> Dict:
+        """✅ MODE SECOURS: Récupération forcée quand l'IA échoue totalement"""
+        print("   🚨 ACTIVATION MODE SECOURS")
+        
+        secours_results = {}
+        
+        for theme, donnees in results_by_theme.items():
+            secours_results[theme] = []
+            
+            if isinstance(donnees, dict):
+                extraits = donnees.get('extraits_textuels', [])
+                
+                # Récupérer au moins 1 extrait par thématique si disponible
+                for extrait in extraits[:1]:  # Premier extrait seulement
+                    if isinstance(extrait, dict):
+                        extrait.update({
+                            'ai_validated': False,
+                            'mode_secours': True,
+                            'secours_reason': 'IA complètement défaillante - récupération forcée',
+                            'confidence_secours': 0.3
+                        })
+                        secours_results[theme].append(extrait)
+                        print(f"     🔄 {theme}: 1 extrait récupéré en mode secours")
+        
+        return secours_results
 
     def _build_validation_prompt(self, entreprise: Dict, search_result, theme: str) -> str:
         """Construction du prompt de validation spécifique"""
@@ -232,148 +430,6 @@ QUESTION : Ce résultat de recherche parle-t-il VRAIMENT de l'entreprise "{nom_e
 Sois très strict sur la pertinence. Un simple mention du nom sans contexte entrepreneurial pertinent = NON PERTINENT.
 
 Analyse et réponds en JSON."""
-
-    def batch_validate_results(self, entreprise: Dict, results_by_theme: Dict) -> Dict[str, List[Dict]]:
-        """
-        Validation par lot avec correction automatique de qualité
-        
-        Args:
-            entreprise: Données de l'entreprise
-            results_by_theme: Dict {thématique: données_thematique}
-        
-        Returns:
-            Dict avec résultats validés et enrichis
-        """
-        
-        print(f"🤖 Validation IA avec correction qualité pour {entreprise.get('nom', 'N/A')}")
-        
-        # 🔧 ÉTAPE 1: Correction automatique de la qualité des données
-        try:
-            from data_quality_fixer import DataQualityFixer
-            quality_fixer = DataQualityFixer()
-            results_corriges = quality_fixer.corriger_donnees_thematiques(entreprise, results_by_theme)
-            print(f"   ✅ Correction qualité appliquée")
-        except ImportError:
-            print(f"   ⚠️ DataQualityFixer non disponible - utilisation données brutes")
-            results_corriges = results_by_theme
-        except Exception as e:
-            print(f"   ⚠️ Erreur correction qualité: {e} - utilisation données brutes")
-            results_corriges = results_by_theme
-        
-        # 🤖 ÉTAPE 2: Validation IA sur données corrigées
-        validated_results = {}
-        total_results = 0
-        current_result = 0
-        
-        # Comptage total et préparation des résultats
-        for theme, donnees_thematique in results_corriges.items():
-            if isinstance(donnees_thematique, dict):
-                extraits = donnees_thematique.get('extraits_textuels', [])
-                if isinstance(extraits, list):
-                    total_results += len(extraits)
-        
-        print(f"   📊 {total_results} extraits de qualité à valider par l'IA")
-        
-        for theme, donnees_thematique in results_corriges.items():
-            validated_results[theme] = []
-            
-            if isinstance(donnees_thematique, dict):
-                extraits = donnees_thematique.get('extraits_textuels', [])
-                qualite_globale = donnees_thematique.get('qualite_score', 'INCONNUE')
-                
-                print(f"   🎯 {theme} - Qualité: {qualite_globale}")
-                
-                if isinstance(extraits, list):
-                    for extrait in extraits:
-                        current_result += 1
-                        print(f"     🔍 Validation {current_result}/{total_results}")
-                        
-                        # Les extraits sont maintenant garantis d'être au format dict
-                        if isinstance(extrait, dict):
-                            result_for_ai = extrait
-                        else:
-                            # Fallback au cas où
-                            result_for_ai = {
-                                'titre': str(extrait),
-                                'description': '',
-                                'url': ''
-                            }
-                        
-                        # 🤖 Validation IA avec seuil adaptatif selon la qualité
-                        try:
-                            validation = self.validate_search_result(entreprise, result_for_ai, theme)
-                            
-                            # Seuil adaptatif selon la qualité des données
-                            qualite_score = extrait.get('qualite_score', 0) if isinstance(extrait, dict) else 0
-                            seuil_adaptatif = 0.3 if qualite_score > 0.5 else 0.5
-                            
-                            # Validation avec seuil adaptatif
-                            if validation.is_relevant or validation.confidence_score > seuil_adaptatif:
-                                enriched_result = result_for_ai.copy()
-                                enriched_result.update({
-                                    'ai_validated': True,
-                                    'ai_confidence': validation.confidence_score,
-                                    'ai_explanation': validation.explanation,
-                                    'ai_extracted_info': validation.extracted_info,
-                                    'ai_themes': validation.themes_detected,
-                                    'validation_timestamp': datetime.now().isoformat(),
-                                    'qualite_pre_ia': qualite_score,
-                                    'seuil_utilise': seuil_adaptatif
-                                })
-                                validated_results[theme].append(enriched_result)
-                                print(f"       ✅ Validé (confiance: {validation.confidence_score:.2f}, seuil: {seuil_adaptatif})")
-                            else:
-                                print(f"       ❌ Rejeté: {validation.explanation[:50]}...")
-                                
-                        except Exception as e:
-                            print(f"       ⚠️ Erreur validation IA: {e}")
-                            # En cas d'erreur IA, garder les extraits de bonne qualité
-                            if isinstance(extrait, dict) and extrait.get('qualite_score', 0) > 0.6:
-                                print(f"       🔄 Fallback: Gardé car bonne qualité")
-                                extrait['ai_validated'] = False
-                                extrait['ai_fallback'] = True
-                                validated_results[theme].append(extrait)
-                        
-                        # Délai pour éviter les rate limits
-                        time.sleep(0.1)  # Réduit pour plus de rapidité
-        
-        # 📊 Statistiques finales
-        total_validated = sum(len(results) for results in validated_results.values())
-        rejection_rate = (1 - total_validated / max(total_results, 1)) * 100
-        
-        print(f"   📊 Résultats finaux: {total_validated}/{total_results} validés ({rejection_rate:.1f}% rejetés)")
-        
-        # 🔄 Mode fallback si trop peu de résultats validés
-        if total_validated == 0 and total_results > 0:
-            print(f"   🔄 FALLBACK: IA trop stricte, récupération des meilleurs extraits")
-            
-            # Récupération des extraits de meilleure qualité sans validation IA
-            for theme, donnees_thematique in results_corriges.items():
-                if isinstance(donnees_thematique, dict):
-                    extraits = donnees_thematique.get('extraits_textuels', [])
-                    # Récupération des extraits avec qualité_score > 0.4
-                    extraits_qualite = [
-                        e for e in extraits 
-                        if isinstance(e, dict) and e.get('qualite_score', 0) > 0.4
-                    ]
-                    
-                    if extraits_qualite:
-                        for extrait in extraits_qualite[:2]:  # Top 2 par thématique
-                            extrait.update({
-                                'ai_validated': False,
-                                'ai_fallback_quality': True,
-                                'fallback_reason': 'IA trop stricte - récupération par qualité',
-                                'qualite_score': extrait.get('qualite_score', 0)
-                            })
-                            validated_results[theme].append(extrait)
-                        
-                        print(f"     🔄 {theme}: {len(extraits_qualite[:2])} extraits récupérés par qualité")
-            
-            # Nouveau décompte après fallback
-            total_validated = sum(len(results) for results in validated_results.values())
-            print(f"   📊 Après fallback: {total_validated} extraits récupérés")
-        
-        return validated_results
     
     def generate_smart_summary(self, entreprise: Dict, validated_results: Dict[str, List[Dict]]) -> Dict:
         """

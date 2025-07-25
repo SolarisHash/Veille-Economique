@@ -18,7 +18,6 @@ from scripts.extracteur_donnees import ExtracteurDonnees
 from scripts.recherche_web import RechercheWeb
 from scripts.analyseur_thematiques import AnalyseurThematiques
 from scripts.generateur_rapports import GenerateurRapports
-from scripts.integration_linkedin import integrer_linkedin_veille
 from scripts.diagnostic_logger import DiagnosticLogger
 
 

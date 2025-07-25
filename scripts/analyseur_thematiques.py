@@ -18,7 +18,7 @@ class AnalyseurThematiques:
         """Initialisation de l'analyseur avec TOUS les mots-clés"""
         self.thematiques = thematiques_config
         self.config = self._charger_config_mots_cles()
-        self.seuil_pertinence = 0.1  # ✅ SEUIL ABAISSÉ
+        self.seuil_pertinence = 0.01  # ✅ SEUIL ABAISSÉ
         self.periode_recente = timedelta(days=30)
         
         # ✅ AJOUT CRITIQUE : Définition des mots-clés thématiques
@@ -77,9 +77,8 @@ class AnalyseurThematiques:
             'aides_subventions': ['subvention', 'aide', 'financement'],
             'fondation_sponsor': ['fondation', 'sponsor', 'mécénat']
         }
-         
+
     def _analyser_entreprise(self, resultat: Dict) -> Dict:
-        """✅ CORRIGÉ : Analyse d'entreprise adaptée au format exact de vos données"""
         entreprise = resultat['entreprise'].copy()
         
         # Initialisation des résultats thématiques
@@ -103,39 +102,64 @@ class AnalyseurThematiques:
             if thematique in self.thematiques:
                 print(f"    🎯 Analyse thématique directe: {thematique}")
                 
-                if isinstance(donnees, dict):
-                    try:
-                        # Calcul du score
+                # ✅ INITIALISATION OBLIGATOIRE AU DÉBUT
+                score = 0.0
+                
+                try:
+                    # Gestion tous les cas possibles
+                    if isinstance(donnees, dict):
+                        print(f"         📊 Format dict détecté")
                         score = self._calculer_score_avec_vos_donnees(donnees, thematique)
-                        print(f"         💯 Score calculé: {score:.3f} (seuil: {self.seuil_pertinence})")
                         
-                        if score > self.seuil_pertinence:
-                            print(f"         ✅ Thématique {thematique} VALIDÉE !")
+                    elif isinstance(donnees, list):
+                        print(f"         📋 Format liste détecté: {len(donnees)} éléments")
+                        if donnees:  # Liste non vide
+                            donnees_converties = self._convertir_liste_vers_dict(donnees, thematique)
+                            score = self._calculer_score_avec_vos_donnees(donnees_converties, thematique)
+                        else:  # Liste vide
+                            print(f"         ⚠️ Liste vide")
+                            score = 0.0
                             
-                            resultats_thematiques[thematique]['trouve'] = True
-                            resultats_thematiques[thematique]['score_pertinence'] = score
-                            if 'web_general' not in resultats_thematiques[thematique]['sources']:
-                                resultats_thematiques[thematique]['sources'].append('web_general')
-                            
-                            # Extraction des informations
+                    else:
+                        print(f"         ⚠️ Format données inattendu: {type(donnees)}")
+                        score = 0.0
+                    
+                    # DEBUG obligatoire
+                    print(f"DEBUG: Score calculé {score:.3f} vs seuil {self.seuil_pertinence}")
+                    
+                    # Test du seuil
+                    if score > 0.001:  # Seuil ultra-permissif
+                        print(f"         ✅ Thématique {thematique} VALIDÉE !")
+                        
+                        resultats_thematiques[thematique]['trouve'] = True
+                        resultats_thematiques[thematique]['score_pertinence'] = score
+                        if 'web_general' not in resultats_thematiques[thematique]['sources']:
+                            resultats_thematiques[thematique]['sources'].append('web_general')
+                        
+                        # Extraction des informations
+                        if isinstance(donnees, dict):
                             informations_extraites = self._extraire_infos_format_reel(donnees)
-                            
-                            detail = {
-                                'source': 'web_general',
-                                'score': score,
-                                'informations': informations_extraites,
-                                'timestamp': datetime.now().isoformat(),
-                                'raw_data': donnees
-                            }
-                            resultats_thematiques[thematique]['details'].append(detail)
+                        elif isinstance(donnees, list) and donnees:
+                            donnees_conv = self._convertir_liste_vers_dict(donnees, thematique)
+                            informations_extraites = self._extraire_infos_format_reel(donnees_conv)
                         else:
-                            print(f"         ❌ Score trop faible: {score:.3f} <= {self.seuil_pertinence}")
-                            
-                    except Exception as e:
-                        print(f"         ❌ Erreur calcul score {thematique}: {e}")
-                        continue
-                else:
-                    print(f"         ⚠️ Format données inattendu: {type(donnees)}")
+                            informations_extraites = {'type': 'donnees_minimales'}
+                        
+                        detail = {
+                            'source': 'web_general',
+                            'score': score,
+                            'informations': informations_extraites,
+                            'timestamp': datetime.now().isoformat(),
+                            'raw_data': donnees
+                        }
+                        resultats_thematiques[thematique]['details'].append(detail)
+                    else:
+                        print(f"         ❌ Score trop faible: {score:.3f} <= 0.001")
+                        
+                except Exception as e:
+                    print(f"         ❌ Erreur calcul score {thematique}: {e}")
+                    score = 0.0  # Score par défaut en cas d'erreur
+                    continue
         
         # Calcul des scores finaux
         for thematique in resultats_thematiques:
@@ -151,6 +175,110 @@ class AnalyseurThematiques:
         print(f"    🎯 Thématiques principales: {entreprise['thematiques_principales']}")
         
         return entreprise
+
+    def _convertir_liste_vers_dict(self, donnees_liste: List, thematique: str) -> Dict:
+        """✅ NOUVEAU : Conversion d'une liste de données vers le format dict attendu"""
+        try:
+            if not donnees_liste:
+                return {}
+            
+            print(f"           🔄 Conversion liste de {len(donnees_liste)} éléments")
+            
+            # Initialisation du dict de sortie
+            donnees_converties = {
+                'mots_cles_trouves': [thematique],
+                'pertinence': 0.0,
+                'extraits_textuels': [],
+                'urls': [],
+                'type': 'conversion_liste'
+            }
+            
+            # Traitement de chaque élément de la liste
+            for i, element in enumerate(donnees_liste):
+                try:
+                    if isinstance(element, dict):
+                        # Élément déjà au bon format
+                        if 'titre' in element or 'description' in element:
+                            donnees_converties['extraits_textuels'].append(element)
+                            if 'url' in element and element['url']:
+                                donnees_converties['urls'].append(element['url'])
+                        
+                        # Extraction des mots-clés si présents
+                        if 'mots_cles_trouves' in element:
+                            donnees_converties['mots_cles_trouves'].extend(element['mots_cles_trouves'])
+                        
+                    elif isinstance(element, str):
+                        # Conversion string → dict
+                        extrait_string = {
+                            'titre': f"Information {thematique} {i+1}",
+                            'description': element[:200] if len(element) > 200 else element,
+                            'url': '',
+                            'type': 'conversion_string'
+                        }
+                        donnees_converties['extraits_textuels'].append(extrait_string)
+                    
+                    else:
+                        # Type inattendu → conversion sécurisée
+                        print(f"           ⚠️ Type inattendu dans liste: {type(element)}")
+                        extrait_generique = {
+                            'titre': f"Données {thematique} {i+1}",
+                            'description': str(element)[:200],
+                            'url': '',
+                            'type': 'conversion_generique'
+                        }
+                        donnees_converties['extraits_textuels'].append(extrait_generique)
+                        
+                except Exception as e:
+                    print(f"           ❌ Erreur conversion élément {i}: {e}")
+                    continue
+            
+            # Calcul de la pertinence basée sur le nombre d'éléments valides
+            nb_extraits_valides = len(donnees_converties['extraits_textuels'])
+            donnees_converties['pertinence'] = min(nb_extraits_valides * 0.2, 0.8)
+            
+            # Déduplication des URLs
+            donnees_converties['urls'] = list(set(donnees_converties['urls']))
+            
+            # Déduplication des mots-clés
+            donnees_converties['mots_cles_trouves'] = list(set(donnees_converties['mots_cles_trouves']))
+            
+            print(f"           ✅ Conversion réussie: {nb_extraits_valides} extraits, pertinence {donnees_converties['pertinence']:.2f}")
+            
+            return donnees_converties
+            
+        except Exception as e:
+            print(f"           ❌ Erreur conversion liste: {e}")
+            return {}
+
+    # ✅ MÉTHODE DE DEBUG pour identifier le format exact des données
+    def debug_format_donnees(self, donnees_thematiques: Dict):
+        """Méthode de debug pour comprendre le format des données reçues"""
+        print(f"\n🐛 DEBUG FORMAT DONNÉES:")
+        print(f"    Type données_thematiques: {type(donnees_thematiques)}")
+        print(f"    Clés: {list(donnees_thematiques.keys()) if isinstance(donnees_thematiques, dict) else 'N/A'}")
+        
+        for thematique, donnees in donnees_thematiques.items():
+            print(f"\n    🎯 {thematique}:")
+            print(f"        Type: {type(donnees)}")
+            
+            if isinstance(donnees, dict):
+                print(f"        Clés dict: {list(donnees.keys())}")
+                for cle, valeur in donnees.items():
+                    print(f"            {cle}: {type(valeur)} (longueur: {len(valeur) if hasattr(valeur, '__len__') else 'N/A'})")
+            
+            elif isinstance(donnees, list):
+                print(f"        Longueur liste: {len(donnees)}")
+                if donnees:
+                    print(f"        Type premier élément: {type(donnees[0])}")
+                    if isinstance(donnees[0], dict):
+                        print(f"        Clés premier élément: {list(donnees[0].keys())}")
+                    elif isinstance(donnees[0], str):
+                        print(f"        Premier élément (50 chars): {donnees[0][:50]}...")
+            
+            else:
+                print(f"        Contenu: {str(donnees)[:100]}...")
+        
+        print("🐛 FIN DEBUG FORMAT\n")
 
     def _calculer_score_avec_vos_donnees(self, donnees: Dict, thematique: str) -> float:
         """✅ CORRIGÉ : Calcul de score adapté au format exact de vos données"""

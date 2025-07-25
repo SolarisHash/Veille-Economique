@@ -71,6 +71,13 @@ def main():
         ai_module = AIValidationModule()
         ai_module.integrate_with_existing_analyzer(analyseur)
         
+        print("🐛 DEBUG AVANT ANALYSE:")
+        for i, resultat in enumerate(resultats_bruts[:2]):
+            print(f"Entreprise {i+1}: {resultat.get('entreprise', {}).get('nom')}")
+            print(f"Données thématiques: {list(resultat.get('donnees_thematiques', {}).keys())}")
+            for theme, data in resultat.get('donnees_thematiques', {}).items():
+                print(f"  {theme}: type={type(data)}, contenu={len(data) if hasattr(data, '__len__') else 'N/A'}")
+
         donnees_enrichies = analyseur.analyser_resultats(resultats_bruts, logger=logger)
         
         # 4. Rapports
