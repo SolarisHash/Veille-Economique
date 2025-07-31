@@ -98,7 +98,7 @@ strategies_recherche:
 
 # Paramètres validation ASSOUPLIS
 validation:
-  score_entreprise_minimum: 0.3  # RÉDUIT de 0.5 à 0.3
+  score_entreprise_minimum: 0.2  # RÉDUIT de 0.5 à 0.3
   score_commune_bonus: 0.2       # Bonus si commune mentionnée
   score_thematique_minimum: 0.1  # RÉDUIT
   exclusions_strictes: false     # ASSOUPLI
@@ -113,6 +113,73 @@ sources_autorisees:
   sites_sectoriels: true
   reseaux_sociaux: true          # AJOUTÉ
   forums_professionnels: false   # Gardé à false pour qualité
+
+# 🎯 NOUVEAUTÉ : Votre territoire spécifique
+territoire:
+  codes_postaux_cibles:
+    - "77600"  # Remplacez par VOS codes postaux
+    - "77700"  
+    - "77400"  # Ajoutez tous vos codes postaux
+    - "77000"
+    - "77058"
+    - "77059"
+    - "77062"
+    - "77075"
+    - "77085"
+    - "77121"
+    - "77124"
+    - "77155"
+    - "77181"
+    - "77209"
+    - "77221"
+    - "77234"
+    - "77237"
+    - "77243"
+    - "77248"
+    - "77307"
+    - "77372"
+    - "77374"
+    - "77438"
+    - "77464"
+    
+  communes_prioritaires:
+    - "Bussy-Saint-Georges"  # Vos communes
+    - "Serris"
+    - "Meaux"
+    - "BUSSY SAINT MARTIN"
+    - "CARNETIN"
+    - "CHALIFERT"
+    - "CHANTELOUP EN BRIE"
+    - "COLLEGIEN"
+    - "CONCHES SUR GONDOIRE"
+    - "DAMPMART"
+    - "FERRIERES EN BRIE"
+    - "GOUVERNES"
+    - "GUERMANTES"
+    - "JABLINES"
+    - "JOSSIGNY"
+    - "LAGNY SUR MARNE"
+    - "LESCHES"
+    - "MONTEVRAIN"
+    - "POMPONNE"
+    - "PONTCARRE"
+    - "SAINT THIBAULT DES VIGNES"
+    - "THORIGNY SUR MARNE"
+    
+# 🏢 Critères PME spécifiques
+filtrage_pme:
+  effectif_max: 249
+  secteurs_prioritaires:
+    - "commerce"
+    - "restauration"
+    - "construction"
+    - "services"
+    - "artisanat"
+
+# 📊 Seuils PME (plus permissifs)
+seuils_pme:
+  validation_minimum: 0.25    # Au lieu de 0.5
+  score_entreprise_minimum: 0.2
 
 
 

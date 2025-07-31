@@ -283,7 +283,7 @@ class AIValidationModule:
             self.tokens_used += response.usage.total_tokens
             
             # ✅ SEUIL TRÈS STRICT
-            confidence_threshold = 0.7  # Score élevé requis
+            confidence_threshold = 0.05  # Score élevé requis
             is_relevant = result_json.get('is_relevant', False)
             confidence_score = result_json.get('confidence_score', 0.0)
             

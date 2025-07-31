@@ -9,6 +9,9 @@ import re
 import random
 from typing import List, Dict, Optional
 
+from scripts.filtreur_pme import FiltreurPME
+
+
 class ExtracteurDonnees:
     """Extraction et nettoyage des données entreprises du fichier Excel"""
     
@@ -76,7 +79,7 @@ class ExtracteurDonnees:
         return True
         
     def nettoyer_donnees(self) -> pd.DataFrame:
-        """Nettoyage et normalisation des données"""
+        """Nettoyage des données avec gestion des NaN"""
         if not self.valider_structure():
             raise Exception("Structure du fichier invalide")
             
@@ -94,6 +97,13 @@ class ExtracteurDonnees:
         # Nettoyage site web
         self.df['site_web_propre'] = self.df['Site Web établissement'].apply(self._nettoyer_url)
         
+        # Remplacez les colonnes textuelles contenant des NaN
+        colonnes_texte = ['nom', 'commune', 'secteur_naf', 'site_web']
+        for col in colonnes_texte:
+            if col in self.df.columns:
+                # Remplacer NaN par chaîne vide et s'assurer que c'est du texte
+                self.df[col] = self.df[col].fillna('').astype(str)
+    
         print(f"🧹 Données nettoyées: {len(self.df)} entreprises valides")
         return self.df
         
@@ -140,37 +150,27 @@ class ExtracteurDonnees:
             url_str = 'https://' + url_str
             
         return url_str
-        
+
     def extraire_echantillon(self, nb_entreprises: int = 10) -> List[Dict]:
-        """Extraction d'un échantillon représentatif"""
+        """Version corrigée avec filtrage PME"""
+        
+        # Votre code existant jusqu'à :
         donnees_propres = self.nettoyer_donnees()
         
-        # Filtrage entreprises avec données complètes
+        # 1. Filtrage standard (votre code existant)
         entreprises_completes = donnees_propres[
             (donnees_propres['siret_valide'] == True) &
             (donnees_propres['nom_normalise'] != "") &
-            (donnees_propres['commune_normalise'] != "") &
-            # ✅ NOUVEAU : Exclusion entreprises non-diffusibles
-            (~donnees_propres['nom_normalise'].str.contains('INFORMATION NON-DIFFUSIBLE', case=False, na=False)) &
-            (~donnees_propres['nom_normalise'].str.contains('NON-DIFFUSIBLE', case=False, na=False)) &
-            (~donnees_propres['nom_normalise'].str.contains('CONFIDENTIEL', case=False, na=False))
+            (~donnees_propres['nom_normalise'].str.contains('NON-DIFFUSIBLE', case=False, na=False))
         ]
-
-        print(f"📊 Filtrage entreprises:")
-        print(f"   📋 Total initial: {len(donnees_propres)}")
-        print(f"   ✅ Recherchables: {len(entreprises_completes)}")
-        print(f"   ❌ Exclues (non-diffusibles): {len(donnees_propres) - len(entreprises_completes)}")
         
-        if len(entreprises_completes) < nb_entreprises:
-            print(f"⚠️  Seulement {len(entreprises_completes)} entreprises complètes disponibles")
-            nb_entreprises = len(entreprises_completes)
-            
-        # Sélection aléatoire stratifiée par commune
-        echantillon = self._selection_stratifiee(entreprises_completes, nb_entreprises)
+        # 2. ✅ NOUVEAU : Filtrage PME territorial
+        from scripts.filtreur_pme import FiltreurPME
+        filtreur = FiltreurPME()
         
-        # Conversion en liste de dictionnaires
-        resultats = []
-        for _, row in echantillon.iterrows():
+        # Conversion en liste de dicts pour le filtreur
+        entreprises_list = []
+        for _, row in entreprises_completes.iterrows():
             entreprise = {
                 'siret': row['SIRET'],
                 'nom': row['nom_normalise'],
@@ -183,11 +183,20 @@ class ExtracteurDonnees:
                 'site_web': row['site_web_propre'],
                 'donnees_brutes': row.to_dict()
             }
-            resultats.append(entreprise)
-            
-        print(f"📋 Échantillon extrait: {len(resultats)} entreprises")
-        return resultats
+            entreprises_list.append(entreprise)
         
+        # 3. Filtrage territorial + PME
+        entreprises_territoire = filtreur.filtrer_par_territoire(entreprises_list)
+        pme_recherchables = filtreur.filtrer_pme_recherchables(entreprises_territoire)
+        
+        # 4. Sélection finale
+        entreprises_finales = pme_recherchables[:nb_entreprises]
+        
+        print(f"📊 Total → Territoire → PME → Final")
+        print(f"📊 {len(entreprises_list)} → {len(entreprises_territoire)} → {len(pme_recherchables)} → {len(entreprises_finales)}")
+        
+        return entreprises_finales
+
     def _selection_stratifiee(self, df: pd.DataFrame, nb_total: int) -> pd.DataFrame:
         """Sélection stratifiée par commune pour représentativité"""
         communes = df['commune_normalise'].value_counts()

@@ -37,7 +37,7 @@ def main():
         return
     
     # Configuration
-    nb_entreprises = 30
+    nb_entreprises = 100
     logger = DiagnosticLogger()
     
     try:

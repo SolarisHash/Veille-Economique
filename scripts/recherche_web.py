@@ -1120,7 +1120,7 @@ class RechercheWeb:
                 score_final = (score_entreprise * 0.6) + score_geo + score_thematique
                 
                 # ✅ SEUIL FINAL ÉLEVÉ pour garantir la pertinence
-                SEUIL_STRICT = 0.3  # Seuil élevé pour éviter les faux positifs
+                SEUIL_STRICT = 0.2  # Seuil élevé pour éviter les faux positifs
                 
                 if score_final >= SEUIL_STRICT:
                     # Ajout des métadonnées de validation
@@ -2852,6 +2852,102 @@ class RechercheWeb:
             'last_call': self.last_google_call.isoformat() if self.last_google_call else None
         }
     
+    def construire_requetes_pme_territoriales(self, entreprise: Dict, thematique: str) -> List[str]:
+        """🎯 Requêtes spécialement adaptées aux PME de votre territoire"""
+        
+        nom = entreprise.get('nom', '')
+        commune = entreprise.get('commune', '')
+        code_postal = entreprise.get('code_postal_detecte', '')
+        secteur = entreprise.get('secteur_naf', '').lower()
+        
+        requetes = []
+        
+        # ✅ STRATÉGIE 1: Hyper-local avec code postal
+        if code_postal:
+            if thematique == 'recrutements':
+                requetes.extend([
+                    f'{code_postal} {nom} recrute',
+                    f'emploi {code_postal} {secteur[:15]}',
+                    f'{commune} {nom} embauche',
+                    f'job {code_postal} {nom}'
+                ])
+            elif thematique == 'evenements':
+                requetes.extend([
+                    f'{nom} {code_postal} ouverture',
+                    f'{commune} {nom} nouveau',
+                    f'inauguration {code_postal} {nom}',
+                    f'{nom} porte ouverte {commune}'
+                ])
+            elif thematique == 'innovations':
+                requetes.extend([
+                    f'{nom} {code_postal} nouveau',
+                    f'{commune} {nom} amélioration',
+                    f'{nom} modernise {code_postal}',
+                    f'nouveauté {commune} {secteur[:15]}'
+                ])
+            elif thematique == 'vie_entreprise':
+                requetes.extend([
+                    f'{nom} {commune} développe',
+                    f'{code_postal} {nom} projet',
+                    f'{nom} extension {commune}',
+                    f'entreprise {code_postal} {secteur[:15]}'
+                ])
+        
+        # ✅ STRATÉGIE 2: Recherche sectorielle locale
+        secteur_simplifie = self._simplifier_secteur_pme(secteur)
+        if secteur_simplifie:
+            requetes.extend([
+                f'{commune} {secteur_simplifie} {thematique}',
+                f'{secteur_simplifie} {code_postal} actualité',
+                f'{commune} {secteur_simplifie} nouveau'
+            ])
+        
+        # ✅ STRATÉGIE 3: Sources spécialisées PME locales
+        requetes.extend([
+            f'site:francebleu.fr {nom} {commune}',
+            f'site:actu.fr {commune} {nom}',
+            f'site:linkedin.com {nom} {commune}',
+            f'site:cci.fr {nom} {code_postal}'
+        ])
+        
+        # ✅ STRATÉGIE 4: Recherche par type d'entreprise PME
+        if entreprise.get('nom_commercial'):
+            # Noms commerciaux = plus de visibilité
+            requetes.extend([
+                f'{nom} {commune} actualité',
+                f'{nom} {commune} info',
+                f'{nom} {code_postal} news'
+            ])
+        
+        return requetes[:10]  # Max 10 requêtes pour PME
+
+    def _simplifier_secteur_pme(self, secteur_naf: str) -> str:
+        """Simplification secteur NAF pour PME locales"""
+        secteur_lower = secteur_naf.lower()
+        
+        # Mapping spécifique PME françaises
+        mappings_pme_france = {
+            'boulangerie': 'boulangerie',
+            'restaurant': 'restaurant', 
+            'coiffure': 'coiffeur',
+            'garage': 'garage',
+            'pharmacie': 'pharmacie',
+            'construction': 'construction',
+            'plomberie': 'plombier',
+            'électricité': 'électricien',
+            'maçonnerie': 'maçon',
+            'commerce de détail': 'magasin',
+            'transport': 'transport',
+            'conseil': 'conseil',
+            'informatique': 'informatique'
+        }
+        
+        for secteur_long, secteur_court in mappings_pme_france.items():
+            if secteur_long in secteur_lower:
+                return secteur_court
+        
+        return ""
+        
 
 
 class GoogleProtection:
