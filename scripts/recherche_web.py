@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import json
 import os
-from urllib.parse import urljoin, urlparse, quote
+from urllib.parse import urljoin, urlparse, quote, quote_plus
 import hashlib
 from bs4 import BeautifulSoup
 import re
@@ -62,6 +62,12 @@ class RechercheWeb:
         
         # Création du dossier cache
         os.makedirs(cache_dir, exist_ok=True)
+
+        # Monitoring Google
+        self.google_calls_count = 0
+        self.google_success_count = 0
+        self.google_blocked_count = 0
+        self.last_google_call = None
 
     def _recherche_web_generale(self, entreprise: Dict) -> Optional[Dict]:
         """✅ CORRIGÉ : Recherche web TOUJOURS ciblée sur l'entreprise"""
@@ -1114,7 +1120,7 @@ class RechercheWeb:
                 score_final = (score_entreprise * 0.6) + score_geo + score_thematique
                 
                 # ✅ SEUIL FINAL ÉLEVÉ pour garantir la pertinence
-                SEUIL_STRICT = 0.8  # Seuil élevé pour éviter les faux positifs
+                SEUIL_STRICT = 0.3  # Seuil élevé pour éviter les faux positifs
                 
                 if score_final >= SEUIL_STRICT:
                     # Ajout des métadonnées de validation
@@ -1817,60 +1823,399 @@ class RechercheWeb:
             print(f"          ⚠️  Erreur Yandex: {str(e)}")
             return None
 
-    def _rechercher_startpage(self, requete: str) -> Optional[List[Dict]]:
-        """Recherche avec Startpage (proxy Google anonyme)"""
+    def _rechercher_google_securise(self, requete: str) -> Optional[List[Dict]]:
+        """Google Search avec protection anti-détection maximale"""
         try:
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            print(f"          🔍 Google (mode furtif)...")
+            
+            # ✅ 1. DÉLAI PRÉALABLE OBLIGATOIRE (crucial pour Google)
+            delai_pre_recherche = random.uniform(8, 15)  # 8-15 secondes
+            print(f"          ⏰ Délai sécurité Google: {delai_pre_recherche:.1f}s")
+            time.sleep(delai_pre_recherche)
+            
+            # ✅ 2. ROTATION D'USER-AGENTS RÉALISTES
+            user_agents_google = [
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0',
+                'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            ]
+            
+            headers_google = {
+                'User-Agent': random.choice(user_agents_google),
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                'Accept-Language': 'fr-FR,fr;q=0.9,en;q=0.8',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'DNT': '1',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'none',
+                'Sec-Fetch-User': '?1',
+                'Cache-Control': 'max-age=0'
             }
             
-            url = "https://www.startpage.com/sp/search"
-            params = {
-                'query': requete,
-                'language': 'francais',
-                'cat': 'web'
+            # ✅ 3. PARAMÈTRES GOOGLE OPTIMISÉS
+            requete_encodee = quote_plus(requete)
+            
+            # Utilisation de google.fr (plus permissif que .com)
+            url_google = "https://www.google.fr/search"
+            
+            params_google = {
+                'q': requete,
+                'hl': 'fr',           # Langue française
+                'gl': 'FR',           # Géolocalisation France
+                'lr': 'lang_fr',      # Résultats en français
+                'num': 8,             # Moins de résultats = moins suspect
+                'start': 0,           # Première page seulement
+                'safe': 'off',        # Pas de SafeSearch
+                'filter': '0',        # Pas de filtrage doublons
+                'pws': '0'            # Pas de personnalisation
             }
+            
+            # ✅ 4. REQUÊTE AVEC PROTECTION MAXIMALE
+            session_google = requests.Session()
+            session_google.headers.update(headers_google)
+            
+            # Timeout généreux pour éviter les erreurs de vitesse
+            response = session_google.get(
+                url_google, 
+                params=params_google, 
+                timeout=25,           # 25 secondes de timeout
+                allow_redirects=True
+            )
+            
+            print(f"          📊 Google HTTP: {response.status_code}")
+            
+            # ✅ 5. GESTION DES CODES DE RÉPONSE
+            if response.status_code == 429:
+                print(f"          🚨 Google rate limit - abandon temporaire")
+                return None
+            elif response.status_code == 403:
+                print(f"          🚫 Google bloqué - abandon temporaire")
+                return None
+            elif response.status_code != 200:
+                print(f"          ❌ Google erreur {response.status_code}")
+                return None
+            
+            # ✅ 6. PARSING SPÉCIALISÉ GOOGLE
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            resultats_google = []
+            
+            # Sélecteurs Google (mis à jour 2024)
+            selecteurs_possibles = [
+                'div.g',                    # Sélecteur principal standard
+                'div[data-ved]',           # Sélecteur avec attribut data
+                '.tF2Cxc',                 # Nouveau sélecteur 2024
+                '.yuRUbf'                  # Sélecteur alternatif
+            ]
+            
+            results_found = []
+            for selecteur in selecteurs_possibles:
+                results_found = soup.select(selecteur)
+                if results_found:
+                    print(f"          ✅ Sélecteur Google actif: {selecteur}")
+                    break
+            
+            if not results_found:
+                print(f"          ⚠️ Aucun sélecteur Google fonctionnel")
+                return None
+            
+            # ✅ 7. EXTRACTION GOOGLE ROBUSTE
+            for i, result in enumerate(results_found[:6]):  # Top 6 résultats
+                try:
+                    # Titre - multiple sélecteurs
+                    titre_elem = (
+                        result.select_one('h3') or 
+                        result.select_one('.LC20lb') or
+                        result.select_one('[role="heading"]') or
+                        result.select_one('h1, h2, h3')
+                    )
+                    titre = titre_elem.get_text().strip() if titre_elem else ""
+                    
+                    # URL - multiple sélecteurs
+                    url_elem = (
+                        result.select_one('a[href]') or
+                        result.select_one('.yuRUbf a') or
+                        result.select_one('h3 a')
+                    )
+                    url_result = ""
+                    if url_elem and url_elem.get('href'):
+                        href = url_elem['href']
+                        # Nettoyage URL Google (suppression redirections)
+                        if href.startswith('/url?q='):
+                            url_result = href.split('/url?q=')[1].split('&')[0]
+                        elif href.startswith('http'):
+                            url_result = href
+                    
+                    # Description - multiple sélecteurs
+                    desc_elem = (
+                        result.select_one('.VwiC3b') or
+                        result.select_one('.s') or
+                        result.select_one('.st') or
+                        result.select_one('[data-sncf]') or
+                        result.select_one('span[style*="color"]')
+                    )
+                    description = desc_elem.get_text().strip() if desc_elem else ""
+                    
+                    # ✅ 8. VALIDATION QUALITÉ GOOGLE
+                    if titre and len(titre) > 10 and description and len(description) > 20:
+                        # Exclusion résultats Google internes
+                        if not any(exclus in url_result.lower() for exclus in [
+                            'google.com', 'youtube.com', 'maps.google', 'images.google'
+                        ]):
+                            resultats_google.append({
+                                'titre': titre,
+                                'description': description,
+                                'url': url_result,
+                                'extrait_complet': f"{titre} - {description}",
+                                'source_moteur': 'google',
+                                'position': i + 1
+                            })
+                            
+                except Exception as e:
+                    print(f"          ⚠️ Erreur parsing résultat Google {i}: {e}")
+                    continue
+            
+            # ✅ 9. DÉLAI POST-RECHERCHE OBLIGATOIRE
+            if resultats_google:
+                delai_post = random.uniform(12, 20)  # 12-20 secondes
+                print(f"          ✅ Google: {len(resultats_google)} résultats")
+                print(f"          ⏰ Délai post-Google: {delai_post:.1f}s")
+                time.sleep(delai_post)
+                
+                return resultats_google
+            else:
+                print(f"          ⚪ Google: aucun résultat extrait")
+                time.sleep(random.uniform(8, 12))  # Délai même en cas d'échec
+                return None
+                
+        except requests.exceptions.Timeout:
+            print(f"          ⏰ Google timeout - normal, on continue")
+            time.sleep(random.uniform(15, 25))
+            return None
+        except Exception as e:
+            print(f"          ❌ Erreur Google: {str(e)[:100]}")
+            time.sleep(random.uniform(10, 15))
+            return None
+
+    def _rechercher_moteur(self, requete: str) -> Optional[List[Dict]]:
+        """Moteur avec cascade élargie"""
+        
+        moteurs_cascade = [
+            ('Bing', self._rechercher_bing),
+            ('Yandex', self._rechercher_yandex), 
+            ('Qwant', self._rechercher_qwant),           # ✅ NOUVEAU
+            ('DuckDuckGo', self._rechercher_duckduckgo),
+            ('Ecosia', self._rechercher_ecosia),         # ✅ NOUVEAU
+            ('SearX', self._rechercher_searx),           # ✅ NOUVEAU
+            ('Startpage', self._rechercher_startpage),   # ✅ NOUVEAU
+            ('Google', self._rechercher_google_avec_protection)  # Dernier recours
+        ]
+        
+        for nom_moteur, fonction_recherche in moteurs_cascade:
+            try:
+                print(f"          🔍 Tentative {nom_moteur}...")
+                resultats = fonction_recherche(requete)
+                
+                if resultats and len(resultats) >= 1:  # Seuil très permissif
+                    print(f"          ✅ {nom_moteur}: {len(resultats)} résultats - SUCCÈS")
+                    return resultats
+                else:
+                    print(f"          ⚪ {nom_moteur}: résultats insuffisants")
+                    
+            except Exception as e:
+                print(f"          ❌ {nom_moteur} échoué: {str(e)[:50]}")
+                continue
+            
+            # Petit délai entre moteurs
+            time.sleep(random.uniform(2, 4))
+        
+        # Fallback final
+        print(f"          🔄 Tous moteurs échoués - simulation")
+        return self._simulation_avancee(requete)
+
+    def _rechercher_searx(self, requete: str) -> Optional[List[Dict]]:
+        """Recherche via SearX (métamoteur open source)"""
+        try:
+            # Instances SearX publiques françaises
+            instances_searx = [
+                'https://searx.be',
+                'https://searx.fmac.xyz',
+                'https://search.privacytools.io',
+                'https://searx.bar'
+            ]
+            
+            instance = random.choice(instances_searx)
+            
+            params = {
+                'q': requete,
+                'format': 'json',
+                'language': 'fr',
+                'categories': 'general'
+            }
+            
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+            
+            response = self.session.get(f"{instance}/search", params=params, headers=headers, timeout=15)
+            
+            if response.status_code == 200:
+                data = response.json()
+                results = data.get('results', [])
+                
+                resultats_searx = []
+                for result in results[:5]:
+                    resultats_searx.append({
+                        'titre': result.get('title', ''),
+                        'description': result.get('content', ''),
+                        'url': result.get('url', ''),
+                        'extrait_complet': f"{result.get('title', '')} - {result.get('content', '')}"
+                    })
+                
+                if resultats_searx:
+                    print(f"          ✅ SearX: {len(resultats_searx)} résultats")
+                    return resultats_searx
+                    
+        except Exception as e:
+            print(f"          ⚠️ SearX échoué: {str(e)[:50]}")
+        
+        return None
+
+    def _rechercher_qwant(self, requete: str) -> Optional[List[Dict]]:
+        """Recherche via Qwant (moteur français respectueux)"""
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'application/json'
+            }
+            
+            params = {
+                'q': requete,
+                'locale': 'fr_FR',
+                'count': 8,
+                'offset': 0
+            }
+            
+            # API Qwant
+            url = "https://api.qwant.com/api/search/web"
+            
+            response = self.session.get(url, params=params, headers=headers, timeout=15)
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                if data.get('status') == 'success':
+                    items = data.get('data', {}).get('result', {}).get('items', [])
+                    
+                    resultats_qwant = []
+                    for item in items[:5]:
+                        resultats_qwant.append({
+                            'titre': item.get('title', ''),
+                            'description': item.get('desc', ''),
+                            'url': item.get('url', ''),
+                            'extrait_complet': f"{item.get('title', '')} - {item.get('desc', '')}"
+                        })
+                    
+                    if resultats_qwant:
+                        print(f"          ✅ Qwant: {len(resultats_qwant)} résultats")
+                        return resultats_qwant
+                        
+        except Exception as e:
+            print(f"          ⚠️ Qwant échoué: {str(e)[:50]}")
+        
+        return None
+
+    def _rechercher_ecosia(self, requete: str) -> Optional[List[Dict]]:
+        """Recherche via Ecosia (écologique et moins restrictif)"""
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept-Language': 'fr-FR,fr;q=0.9'
+            }
+            
+            params = {
+                'q': requete,
+                'region': 'fr-FR'
+            }
+            
+            url = "https://www.ecosia.org/search"
             
             response = self.session.get(url, params=params, headers=headers, timeout=15)
             
             if response.status_code == 200:
                 soup = BeautifulSoup(response.text, 'html.parser')
                 
-                resultats_extraits = []
+                resultats_ecosia = []
                 
-                # Sélecteurs Startpage
-                results = soup.find_all('div', class_='w-gl__result')
+                # Sélecteurs Ecosia
+                for result in soup.select('.result')[:5]:
+                    titre_elem = result.select_one('.result-title a')
+                    desc_elem = result.select_one('.result-snippet')
+                    
+                    if titre_elem and desc_elem:
+                        resultats_ecosia.append({
+                            'titre': titre_elem.get_text().strip(),
+                            'description': desc_elem.get_text().strip(),
+                            'url': titre_elem.get('href', ''),
+                            'extrait_complet': f"{titre_elem.get_text()} - {desc_elem.get_text()}"
+                        })
                 
-                for result in results[:5]:
-                    try:
-                        # Titre
-                        titre_elem = result.find('h3') or result.find('a')
-                        titre = titre_elem.get_text().strip() if titre_elem else ""
-                        
-                        # URL
-                        url_elem = result.find('a')
-                        url_result = url_elem['href'] if url_elem and url_elem.get('href') else ""
-                        
-                        # Description
-                        desc_elem = result.find('p', class_='w-gl__description')
-                        description = desc_elem.get_text().strip() if desc_elem else ""
-                        
-                        if titre and description:
-                            resultats_extraits.append({
-                                'titre': titre,
-                                'description': description,
-                                'url': url_result,
-                                'extrait_complet': f"{titre} - {description}"
-                            })
-                            
-                    except Exception:
-                        continue
-                
-                return resultats_extraits if resultats_extraits else None
-                
+                if resultats_ecosia:
+                    print(f"          ✅ Ecosia: {len(resultats_ecosia)} résultats")
+                    return resultats_ecosia
+                    
         except Exception as e:
-            print(f"          ⚠️  Erreur Startpage: {str(e)}")
-            return None
+            print(f"          ⚠️ Ecosia échoué: {str(e)[:50]}")
+        
+        return None
+
+    def _rechercher_startpage(self, requete: str) -> Optional[List[Dict]]:
+        """Recherche via Startpage (proxy Google privé)"""
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+            
+            params = {
+                'query': requete,
+                'language': 'francais',
+                'cat': 'web'
+            }
+            
+            url = "https://www.startpage.com/sp/search"
+            
+            response = self.session.get(url, params=params, headers=headers, timeout=15)
+            
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.text, 'html.parser')
+                
+                resultats_startpage = []
+                
+                for result in soup.select('.w-gl__result')[:5]:
+                    titre_elem = result.select_one('h3 a')
+                    desc_elem = result.select_one('.w-gl__description')
+                    
+                    if titre_elem and desc_elem:
+                        resultats_startpage.append({
+                            'titre': titre_elem.get_text().strip(),
+                            'description': desc_elem.get_text().strip(),
+                            'url': titre_elem.get('href', ''),
+                            'extrait_complet': f"{titre_elem.get_text()} - {desc_elem.get_text()}"
+                        })
+                
+                if resultats_startpage:
+                    print(f"          ✅ Startpage: {len(resultats_startpage)} résultats")
+                    return resultats_startpage
+                    
+        except Exception as e:
+            print(f"          ⚠️ Startpage échoué: {str(e)[:50]}")
+        
+        return None
 
     def _tester_api_ddgs(self):
         """Test des différentes syntaxes de l'API ddgs"""
@@ -2496,3 +2841,153 @@ class RechercheWeb:
                         
         except Exception:
             pass
+    
+    def get_google_stats(self) -> Dict:
+        """Statistiques d'utilisation Google"""
+        return {
+            'total_calls': self.google_calls_count,
+            'successful_calls': self.google_success_count,
+            'blocked_calls': self.google_blocked_count,
+            'success_rate': (self.google_success_count / max(self.google_calls_count, 1)) * 100,
+            'last_call': self.last_google_call.isoformat() if self.last_google_call else None
+        }
+    
+
+
+class GoogleProtection:
+    """Système de protection anti-détection Google"""
+    
+    def __init__(self):
+        self.call_history = []
+        self.blocked_until = None
+        self.consecutive_failures = 0
+        self.daily_limit = 50  # Limite quotidienne prudente
+        
+    def can_call_google(self) -> bool:
+        """Vérifie si on peut appeler Google en sécurité"""
+        from datetime import datetime, timedelta
+        
+        now = datetime.now()
+        
+        # Vérification blocage temporaire
+        if self.blocked_until and now < self.blocked_until:
+            minutes_left = (self.blocked_until - now).total_seconds() / 60
+            print(f"          🚫 Google bloqué encore {minutes_left:.1f} minutes")
+            return False
+        
+        # Vérification limite quotidienne
+        today_calls = [call for call in self.call_history 
+                      if call['date'].date() == now.date()]
+        
+        if len(today_calls) >= self.daily_limit:
+            print(f"          📊 Limite quotidienne Google atteinte ({self.daily_limit})")
+            return False
+        
+        # Vérification dernière requête (minimum 30 secondes)
+        if self.call_history:
+            last_call = max(self.call_history, key=lambda x: x['date'])
+            if (now - last_call['date']).total_seconds() < 30:
+                print(f"          ⏰ Délai minimum Google non respecté")
+                return False
+        
+        return True
+    
+    def register_call(self, success: bool, blocked: bool = False):
+        """Enregistre un appel Google"""
+        from datetime import datetime, timedelta
+        
+        self.call_history.append({
+            'date': datetime.now(),
+            'success': success,
+            'blocked': blocked
+        })
+        
+        if blocked:
+            # Blocage temporaire croissant
+            self.consecutive_failures += 1
+            block_minutes = min(self.consecutive_failures * 30, 240)  # Max 4h
+            self.blocked_until = datetime.now() + timedelta(minutes=block_minutes)
+            print(f"          🚨 Google bloqué pour {block_minutes} minutes")
+        elif success:
+            self.consecutive_failures = 0  # Reset en cas de succès
+    
+    def get_smart_delay(self) -> float:
+        """Calcule un délai intelligent selon l'historique"""
+        base_delay = random.uniform(15, 25)
+        
+        # Augmente le délai si échecs récents
+        recent_failures = sum(1 for call in self.call_history[-5:] 
+                            if not call['success'])
+        
+        delay_multiplier = 1 + (recent_failures * 0.5)
+        return base_delay * delay_multiplier
+
+    # ✅ INTÉGRATION DANS LA CLASSE PRINCIPALE
+    def __init__(self, periode_recherche: timedelta, cache_dir: str = "data/cache"):
+        """Initialisation avec protection Google"""
+        # Votre code existant...
+        
+        # ✅ PROTECTION GOOGLE
+        self.google_protection = GoogleProtection()
+        
+    def _rechercher_google_avec_protection(self, requete: str) -> Optional[List[Dict]]:
+        """Google avec protection intelligente"""
+        
+        # ✅ 1. VÉRIFICATION AUTORISATION
+        if not self.google_protection.can_call_google():
+            print(f"          🚫 Google non autorisé - protection active")
+            return None
+        
+        # ✅ 2. DÉLAI INTELLIGENT
+        smart_delay = self.google_protection.get_smart_delay()
+        print(f"          🧠 Délai intelligent Google: {smart_delay:.1f}s")
+        time.sleep(smart_delay)
+        
+        # ✅ 3. APPEL GOOGLE SÉCURISÉ
+        try:
+            resultats = self._rechercher_google_securise(requete)
+            
+            if resultats:
+                self.google_protection.register_call(success=True)
+                print(f"          ✅ Google succès - protection mise à jour")
+                return resultats
+            else:
+                self.google_protection.register_call(success=False)
+                print(f"          ⚠️ Google échec - protection mise à jour")
+                return None
+                
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code in [429, 503, 403]:
+                self.google_protection.register_call(success=False, blocked=True)
+                print(f"          🚨 Google détection - protection activée")
+            else:
+                self.google_protection.register_call(success=False)
+            return None
+        except Exception as e:
+            self.google_protection.register_call(success=False)
+            print(f"          ❌ Erreur Google: {str(e)[:50]}")
+            return None
+
+    # ✅ CONFIGURATION AVANCÉE
+    GOOGLE_CONFIG = {
+        'max_daily_calls': 50,           # Limite quotidienne
+        'min_delay_seconds': 30,         # Délai minimum entre appels
+        'max_consecutive_failures': 3,   # Avant blocage temporaire
+        'block_duration_minutes': 60,    # Durée blocage initial
+        'user_agent_rotation': True,     # Rotation UA
+        'proxy_support': False,          # Pas de proxy (plus suspect)
+        'respect_robots_txt': True       # Respect robots.txt
+    }
+
+    def should_use_google(self, requete: str, tentatives_precedentes: List[str]) -> bool:
+        """Décide si Google doit être utilisé"""
+        
+        # Conditions pour activer Google
+        conditions = [
+            len(tentatives_precedentes) >= 3,  # Autres moteurs ont échoué
+            'entreprise' in requete.lower(),   # Requête entrepreneuriale
+            not any(exclus in requete.lower() for exclus in ['test', 'debug']),  # Pas de test
+            self.google_protection.can_call_google()  # Protection OK
+        ]
+        
+        return all(conditions)

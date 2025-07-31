@@ -27,7 +27,8 @@ def main():
     print("=" * 70)
     
     # Configuration
-    fichier_excel = "data/input/entreprises_test_reelles.xlsx"
+    fichier_excel = "data/input/entreprises_base.xlsx"
+    # fichier_excel = "data/input/entreprises_test_reelles.xlsx"
     nb_entreprises = 50
     
     # Vérifications préalables

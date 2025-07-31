@@ -113,3 +113,50 @@ sources_autorisees:
   sites_sectoriels: true
   reseaux_sociaux: true          # AJOUTÉ
   forums_professionnels: false   # Gardé à false pour qualité
+
+
+
+# Configuration Google Search (PRUDENTE)
+google_search:
+  enabled: true                    # Activer Google
+  priority: 4                      # Dernière priorité (après Bing, Yandex, DuckDuckGo)
+  daily_limit: 50                  # Maximum 50 requêtes/jour
+  min_delay_seconds: 30            # Minimum 30s entre requêtes
+  smart_delays: true               # Délais adaptatifs selon succès
+  block_on_detection: true         # Blocage auto si détection
+  block_duration_hours: 2          # Durée blocage en cas de détection
+  
+  # Conditions d'activation
+  activation_conditions:
+    other_engines_failed: 3        # Si 3+ autres moteurs échouent
+    min_quality_threshold: 2       # Si <2 résultats des autres moteurs
+    enterprise_queries_only: true  # Seulement requêtes d'entreprise
+  
+  # Protection anti-détection
+  protection:
+    rotate_user_agents: true
+    randomize_delays: true
+    respect_rate_limits: true
+    use_french_domain: true        # google.fr plus permissif
+    limit_results_per_query: 8     # Moins suspect que 10+
+    
+# Ordre des moteurs (GOOGLE EN DERNIER)
+search_engines_priority:
+  1: "bing"           # Premier choix - stable et performant
+  2: "yandex"         # Deuxième choix - bon backup
+  3: "duckduckgo"     # Troisième choix - fiable
+  4: "google"         # DERNIER RECOURS - efficace mais risqué
+  5: "simulation"     # Fallback final
+
+# Seuils de qualité par moteur
+quality_thresholds:
+  bing: 3             # Minimum 3 résultats pour valider
+  yandex: 2           # Minimum 2 résultats
+  duckduckgo: 2       # Minimum 2 résultats  
+  google: 1           # Minimum 1 résultat (car dernier recours)
+  
+# Monitoring et alertes
+monitoring:
+  log_google_usage: true
+  alert_on_blocks: true
+  daily_reports: true

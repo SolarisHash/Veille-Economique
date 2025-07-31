@@ -27,7 +27,8 @@ def main():
     print("🚀 VEILLE ÉCONOMIQUE - VERSION IA FINALE")
     print("=" * 60)
     
-    fichier_excel = "data/input/entreprises_test_reelles.xlsx"
+    # fichier_excel = "data/input/entreprises_test_reelles.xlsx"
+    fichier_excel = "data/input/entreprises_base.xlsx"
     if not os.path.exists(fichier_excel):
         fichier_excel = "data/input/entreprises_base.xlsx"
     
@@ -36,7 +37,7 @@ def main():
         return
     
     # Configuration
-    nb_entreprises = 10
+    nb_entreprises = 30
     logger = DiagnosticLogger()
     
     try:

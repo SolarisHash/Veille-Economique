@@ -18,7 +18,7 @@ class AnalyseurThematiques:
         """Initialisation de l'analyseur avec TOUS les mots-clés"""
         self.thematiques = thematiques_config
         self.config = self._charger_config_mots_cles()
-        self.seuil_pertinence = 0.01  # ✅ SEUIL ABAISSÉ
+        self.seuil_pertinence = 0.001  # ✅ SEUIL ABAISSÉ
         self.periode_recente = timedelta(days=30)
         
         # ✅ AJOUT CRITIQUE : Définition des mots-clés thématiques
@@ -281,8 +281,11 @@ class AnalyseurThematiques:
         print("🐛 FIN DEBUG FORMAT\n")
 
     def _calculer_score_avec_vos_donnees(self, donnees: Dict, thematique: str) -> float:
-        """✅ CORRIGÉ : Calcul de score adapté au format exact de vos données"""
+        """✅ Calcul de score adapté au format exact de vos données"""
         score_total = 0.0
+        
+        print(f"           🐛 DEBUG: Analyse {thematique}")
+        print(f"           📊 Données reçues: {list(donnees.keys())}")
         
         print(f"           📊 Analyse des données: {list(donnees.keys())}")
         
