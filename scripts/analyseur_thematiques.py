@@ -612,26 +612,31 @@ class AnalyseurThematiques:
         return bonus.get(source, 0.0)
     
     def _calculer_score_global(self, resultats_thematiques: Dict) -> float:
-        """Calcul du score global avec pondération réaliste"""
-        scores_valides = []
-        
-        for thematique, res in resultats_thematiques.items():
-            if res['trouve'] and res['score_pertinence'] > 0.3:  # Seuil plus élevé
-                scores_valides.append(res['score_pertinence'])
-        
+        """Calcule un score global d'activité de l'entreprise.
+
+        Seules les thématiques considérées comme suffisamment pertinentes
+        (score > 0.3) sont prises en compte. La moyenne de ces scores est
+        ensuite augmentée d'un léger bonus reflétant la diversité des
+        thématiques détectées, le tout étant plafonné à ``0.8`` afin de
+        réserver une marge pour d'éventuels enrichissements externes
+        (par exemple l'analyse de réseaux sociaux).
+        """
+
+        scores_valides = [
+            res['score_pertinence']
+            for res in resultats_thematiques.values()
+            if res['trouve'] and res['score_pertinence'] > 0.3
+        ]
+
         if not scores_valides:
             return 0.0
-            
-        # Moyenne pondérée plus conservative
+
         score_moyen = sum(scores_valides) / len(scores_valides)
-        
-        # Bonus diversité réduit
-        bonus_diversite = min(len(scores_valides) * 0.02, 0.1)  # Maximum 0.1
-        
-        # Score final plus réaliste
-        score_final = min(score_moyen + bonus_diversite, 0.8)  # Maximum 0.8
-        
-        return score_final    
+
+        # Bonus de 0.02 par thématique pertinente (maximum 0.1)
+        bonus_diversite = min(len(scores_valides) * 0.02, 0.1)
+
+        return min(score_moyen + bonus_diversite, 0.8)
     
     def _get_bonus_source(self, source: str) -> float:
         """Bonus selon la fiabilité de la source"""
@@ -693,21 +698,6 @@ class AnalyseurThematiques:
         else:
             resultat_thematique['niveau_confiance'] = 'Faible'
             
-    def _calculer_score_global(self, resultats_thematiques: Dict) -> float:
-        """Calcul du score global d'activité de l'entreprise"""
-        scores = [
-            res['score_pertinence'] for res in resultats_thematiques.values()
-            if res['trouve']
-        ]
-        
-        if not scores:
-            return 0.0
-            
-        # Moyenne pondérée avec bonus pour diversité thématique
-        score_moyen = sum(scores) / len(scores)
-        bonus_diversite = len(scores) * 0.05
-        
-        return min(score_moyen + bonus_diversite, 1.0)
         
     def _identifier_thematiques_principales(self, resultats_thematiques: Dict) -> List[str]:
         """Identification des thématiques principales"""
