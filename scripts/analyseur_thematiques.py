@@ -128,7 +128,7 @@ class AnalyseurThematiques:
                     print(f"DEBUG: Score calculé {score:.3f} vs seuil {self.seuil_pertinence}")
                     
                     # Test du seuil
-                    if score > 0.001:  # Seuil ultra-permissif
+                    if score > self.seuil_pertinence:
                         print(f"         ✅ Thématique {thematique} VALIDÉE !")
                         
                         resultats_thematiques[thematique]['trouve'] = True
@@ -154,7 +154,7 @@ class AnalyseurThematiques:
                         }
                         resultats_thematiques[thematique]['details'].append(detail)
                     else:
-                        print(f"         ❌ Score trop faible: {score:.3f} <= 0.001")
+                        print(f"         ❌ Score trop faible: {score:.3f} <= {self.seuil_pertinence}")
                         
                 except Exception as e:
                     print(f"         ❌ Erreur calcul score {thematique}: {e}")
