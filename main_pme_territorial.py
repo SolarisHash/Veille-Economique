@@ -23,6 +23,8 @@ from scripts.filtreur_pme import FiltreurPME
 from scripts.generateur_rapports import GenerateurRapports
 from scripts.recherche_web import RechercheWeb
 from scripts.diagnostic_logger import DiagnosticLogger
+from ai_validation_module import AIValidationModule
+from data_quality_fixer import DataQualityFixer
 
 def valider_configuration_pme():
     """Valide que la configuration PME est correcte"""
@@ -318,6 +320,17 @@ def main_pme_territorial():
                 continue
         
         print(f"\n✅ Recherche terminée pour {len(resultats_bruts)} entreprises")
+
+        # Correction de qualité des données avant analyse
+        fixer = DataQualityFixer()
+        for resultat in resultats_bruts:
+            entreprise_r = resultat.get('entreprise', {})
+            donnees_thematiques = resultat.get('donnees_thematiques', {})
+            if donnees_thematiques:
+                resultat['donnees_thematiques'] = fixer.corriger_donnees_thematiques(
+                    entreprise_r,
+                    donnees_thematiques
+                )
         
         # ✅ ÉTAPE 3: Analyse avec seuils PME
         print(f"\n🔬 ÉTAPE 3/5 - ANALYSE THÉMATIQUE PME")
@@ -325,6 +338,10 @@ def main_pme_territorial():
         
         thematiques = ['recrutements', 'evenements', 'innovations', 'vie_entreprise']
         analyseur = AnalyseurThematiques(thematiques)
+
+        # Intégration du module IA de validation
+        ai_module = AIValidationModule()
+        ai_module.integrate_with_existing_analyzer(analyseur)
         
         # ✅ ADAPTATION SEUILS POUR PME
         analyseur.seuil_pertinence = 0.25  # Plus permissif que 0.5
