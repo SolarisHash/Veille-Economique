@@ -16,6 +16,10 @@ from bs4 import BeautifulSoup
 import re
 import random
 
+from scripts.analyseur_thematiques import AnalyseurThematiques
+from scripts.extracteur_donnees import ExtracteurDonnees
+from scripts.generateur_rapports import GenerateurRapports
+
 class RechercheWeb:
     """Moteur de recherche web pour informations entreprises"""
     
@@ -1120,7 +1124,7 @@ class RechercheWeb:
                 score_final = (score_entreprise * 0.6) + score_geo + score_thematique
                 
                 # ✅ SEUIL FINAL ÉLEVÉ pour garantir la pertinence
-                SEUIL_STRICT = 0.2  # Seuil élevé pour éviter les faux positifs
+                SEUIL_STRICT = 0.3  # Seuil élevé pour éviter les faux positifs
                 
                 if score_final >= SEUIL_STRICT:
                     # Ajout des métadonnées de validation
@@ -2947,7 +2951,7 @@ class RechercheWeb:
                 return secteur_court
         
         return ""
-        
+    
 
 
 class GoogleProtection:

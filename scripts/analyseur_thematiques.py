@@ -18,7 +18,7 @@ class AnalyseurThematiques:
         """Initialisation de l'analyseur avec TOUS les mots-clés"""
         self.thematiques = thematiques_config
         self.config = self._charger_config_mots_cles()
-        self.seuil_pertinence = 0.001  # ✅ SEUIL ABAISSÉ
+        self.seuil_pertinence = 0.5  # ✅ SEUIL ABAISSÉ
         self.periode_recente = timedelta(days=30)
         
         # ✅ AJOUT CRITIQUE : Définition des mots-clés thématiques
