@@ -6,11 +6,11 @@ traitement:
   periode_recherche_mois: 12  # Élargi à 12 mois
   timeout_requetes_sec: 15    # Augmenté pour plus de stabilité
   delai_entre_requetes_sec: 3 # Augmenté pour éviter les blocages
-  seuil_validation_minimum: 0.2  # RÉDUIT de 0.3 à 0.2
+  seuil_validation_minimum: 0.45  # Augmenté de 0.2 à 0.45
 
 # Paramètres de scoring - PLUS PERMISSIFS
 scoring:
-  seuil_pertinence_minimum: 0.2  # RÉDUIT
+  seuil_pertinence_minimum: 0.4  # Seuil relevé pour plus de rigueur
   poids_source_officielle: 1.0
   poids_presse_locale: 0.9       # AUGMENTÉ
   poids_web_general: 0.7         # AUGMENTÉ
@@ -98,7 +98,7 @@ strategies_recherche:
 
 # Paramètres validation ASSOUPLIS
 validation:
-  score_entreprise_minimum: 0.2  # RÉDUIT de 0.5 à 0.3
+  score_entreprise_minimum: 0.4  # Rehaussé pour fiabilité
   score_commune_bonus: 0.2       # Bonus si commune mentionnée
   score_thematique_minimum: 0.1  # RÉDUIT
   exclusions_strictes: false     # ASSOUPLI
@@ -178,8 +178,8 @@ filtrage_pme:
 
 # 📊 Seuils PME (plus permissifs)
 seuils_pme:
-  validation_minimum: 0.25    # Au lieu de 0.5
-  score_entreprise_minimum: 0.2
+  validation_minimum: 0.45    # Rehaussé pour plus d'exigence
+  score_entreprise_minimum: 0.4  # Cohérent avec la validation générale
 
 
 
