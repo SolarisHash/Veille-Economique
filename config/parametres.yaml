@@ -117,54 +117,180 @@ sources_autorisees:
 # 🎯 NOUVEAUTÉ : Votre territoire spécifique
 territoire:
   codes_postaux_cibles:
-    - "77600"  # Remplacez par VOS codes postaux
-    - "77700"  
-    - "77400"  # Ajoutez tous vos codes postaux
-    - "77000"
-    - "77058"
-    - "77059"
-    - "77062"
-    - "77075"
-    - "77085"
-    - "77121"
-    - "77124"
-    - "77155"
-    - "77181"
-    - "77209"
-    - "77221"
-    - "77234"
-    - "77237"
-    - "77243"
-    - "77248"
-    - "77307"
-    - "77372"
-    - "77374"
-    - "77438"
-    - "77464"
-    
-  communes_prioritaires:
-    - "Bussy-Saint-Georges"  # Vos communes
-    - "Serris"
-    - "Meaux"
-    - "BUSSY SAINT MARTIN"
-    - "CARNETIN"
-    - "CHALIFERT"
-    - "CHANTELOUP EN BRIE"
-    - "COLLEGIEN"
-    - "CONCHES SUR GONDOIRE"
-    - "DAMPMART"
-    - "FERRIERES EN BRIE"
-    - "GOUVERNES"
-    - "GUERMANTES"
-    - "JABLINES"
-    - "JOSSIGNY"
-    - "LAGNY SUR MARNE"
-    - "LESCHES"
-    - "MONTEVRAIN"
-    - "POMPONNE"
-    - "PONTCARRE"
-    - "SAINT THIBAULT DES VIGNES"
-    - "THORIGNY SUR MARNE"
+  # Zone principale Bussy-Saint-Georges / Marne-la-Vallée
+  - "77600"  # Bussy-Saint-Georges
+  - "77700"  # Serris, Chessy, Coupvray
+  - "77400"  # Lagny-sur-Marne, Thorigny-sur-Marne
+  
+  # Zone élargie Est Seine-et-Marne (15-20km)
+  - "77000"  # Melun, Vaux-le-Pénil
+  - "77300"  # Fontainebleau
+  - "77500"  # Chelles
+  - "77200"  # Torcy
+  - "77100"  # Meaux
+  - "77160"  # Provins
+  - "77250"  # Moret-Loing-et-Orvanne
+  - "77140"  # Nemours
+  
+  # Codes spécifiques communes proches
+  - "77058"  # Bussy-Saint-Martin
+  - "77059"  # Carnetin
+  - "77062"  # Chalifert
+  - "77075"  # Chanteloup-en-Brie
+  - "77085"  # Collégien
+  - "77121"  # Conches-sur-Gondoire
+  - "77124"  # Dampmart
+  - "77155"  # Ferrières-en-Brie
+  - "77181"  # Gouvernes
+  - "77209"  # Guermantes
+  - "77221"  # Jablines
+  - "77234"  # Jossigny
+  - "77237"  # Lesches
+  - "77243"  # Montevrain
+  - "77248"  # Pomponne
+  - "77307"  # Pontcarré
+  - "77372"  # Saint-Thibault-des-Vignes
+  - "77374"  # Thorigny-sur-Marne
+  - "77438"  # Bailly-Romainvilliers
+  - "77464"  # Val-d'Europe
+  
+  # Zone élargie proche Paris (77 limitrophe)
+  - "77290"  # Mitry-Mory
+  - "77410"  # Claye-Souilly
+  - "77450"  # Esbly
+  - "77470"  # Trilport
+  - "77480"  # Bray-sur-Seine
+  - "77490"  # Pontault-Combault
+  - "77550"  # Moissy-Cramayel
+  - "77600"  # Bussy-Saint-Georges (déjà listé)
+  - "77610"  # Fontenay-Trésigny
+  - "77630"  # Barbizon
+  - "77650"  # Longjumeau
+  - "77680"  # Roissy-en-Brie
+  - "77690"  # Montigny-sur-Loing
+  
+  # Codes postaux petite couronne proche (limites 77)
+  - "93160"  # Noisy-le-Grand (limite 77)
+  - "93410"  # Vaujours (proche 77)
+  - "94440"  # Villecresnes (limite 77)
+  - "94320"  # Thiais (proche)
+  
+  # Zone sud 77 (Sénart, Évry proche)
+  - "77127"  # Lieusaint
+  - "77176"  # Savigny-le-Temple
+  - "77190"  # Dammarie-les-Lys
+  - "77230"  # Moussy-le-Neuf
+  - "77260"  # La Ferté-sous-Jouarre
+  - "77270"  # Villeparisis
+  - "77280"  # Othis
+  - "77350"  # Le Mée-sur-Seine
+  - "77360"  # Vaires-sur-Marne
+  - "77380"  # Combs-la-Ville
+  - "77390"  # Verneuil-l'Étang
+  
+  # Zone nord-est 77 (Coulommiers, etc.)
+  - "77120"  # Coulommiers
+  - "77130"  # Montereau-Fault-Yonne
+  - "77150"  # Lésigny
+  - "77170"  # Brie-Comte-Robert
+  - "77180"  # Roissy-en-Brie
+  - "77220"  # Gretz-Armainvilliers
+  - "77240"  # Cesson
+  - "77330"  # Ozoir-la-Ferrière
+  - "77340"  # Pontault-Combault
+  - "77420"  # Champs-sur-Marne
+  - "77430"  # Champagne-sur-Seine
+  - "77440"  # Lizy-sur-Ourcq
+  - "77460"  # Souppes-sur-Loing
+
+communes_prioritaires:
+  # Zone principale Marne-la-Vallée
+  - "Bussy-Saint-Georges"
+  - "Serris"
+  - "Chessy"
+  - "Coupvray"
+  - "Bailly-Romainvilliers"
+  - "Val-d'Europe"
+  - "Montevrain"
+  
+  # Communes historiques importantes
+  - "Meaux"
+  - "Melun"
+  - "Fontainebleau"
+  - "Provins"
+  - "Coulommiers"
+  - "Nemours"
+  - "Chelles"
+  - "Torcy"
+  - "Lagny-sur-Marne"
+  
+  # Communes territoire direct
+  - "Bussy-Saint-Martin"
+  - "Carnetin"
+  - "Chalifert"
+  - "Chanteloup-en-Brie"
+  - "Collégien"
+  - "Conches-sur-Gondoire"
+  - "Dampmart"
+  - "Ferrières-en-Brie"
+  - "Gouvernes"
+  - "Guermantes"
+  - "Jablines"
+  - "Jossigny"
+  - "Lesches"
+  - "Pomponne"
+  - "Pontcarré"
+  - "Saint-Thibault-des-Vignes"
+  - "Thorigny-sur-Marne"
+  
+  # Communes proches importantes
+  - "Esbly"
+  - "Trilport"
+  - "Claye-Souilly"
+  - "Mitry-Mory"
+  - "Vaires-sur-Marne"
+  - "Champs-sur-Marne"
+  - "Noisy-le-Grand"
+  - "Roissy-en-Brie"
+  - "Pontault-Combault"
+  - "Ozoir-la-Ferrière"
+  - "Brie-Comte-Robert"
+  - "Gretz-Armainvilliers"
+  
+  # Zone Sénart / Sud 77
+  - "Lieusaint"
+  - "Savigny-le-Temple"
+  - "Combs-la-Ville"
+  - "Dammarie-les-Lys"
+  - "Le Mée-sur-Seine"
+  - "Verneuil-l'Étang"
+  - "Cesson"
+  - "Vert-Saint-Denis"
+  - "Moissy-Cramayel"
+  
+  # Communes rurales mais actives économiquement
+  - "Moret-Loing-et-Orvanne"
+  - "La Ferté-sous-Jouarre"
+  - "Montereau-Fault-Yonne"
+  - "Villeparisis"
+  - "Fontenay-Trésigny"
+  - "Lésigny"
+  - "Champeaux"
+  - "Nangis"
+  - "Rebais"
+  - "Donnemarie-Dontilly"
+  
+  # Nouvelles communes intégrées
+  - "Crécy-la-Chapelle"
+  - "Tournan-en-Brie"
+  - "Roissy-en-Brie"
+  - "Mandres-les-Roses"
+  - "Villecresnes"
+  - "Santeny"
+  - "Marolles-en-Brie"
+  - "Boussy-Saint-Antoine"
+  - "Brunoy"
+  - "Yerres"
     
 # 🏢 Critères PME spécifiques
 filtrage_pme:
