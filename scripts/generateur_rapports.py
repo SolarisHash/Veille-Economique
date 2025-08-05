@@ -57,12 +57,16 @@ class GenerateurRapports:
         return str(chemin_fichier)
         
     def _creer_dataframe_principal(self, entreprises: List[Dict]) -> pd.DataFrame:
-        """Création du DataFrame principal avec toutes les données et détails complets"""
+        """Version SANS SCORES - Focus sur les entreprises actives uniquement"""
         donnees = []
         
         for entreprise in entreprises:
+            # ✅ FILTRAGE : Seulement les entreprises avec activité
+            if entreprise.get('score_global', 0) <= 0.1:
+                continue  # Skip les entreprises sans activité
+            
             ligne = {
-                # Données de base
+                # Données de base (inchangées)
                 'SIRET': entreprise.get('siret', ''),
                 'Nom': entreprise.get('nom', ''),
                 'Enseigne': entreprise.get('enseigne', ''),
@@ -72,13 +76,12 @@ class GenerateurRapports:
                 'Site_Web': entreprise.get('site_web', ''),
                 'Dirigeant': entreprise.get('dirigeant', ''),
                 
-                # Scores d'analyse
-                'Score_Global': round(entreprise.get('score_global', 0), 2),
-                'Thematiques_Principales': ', '.join(entreprise.get('thematiques_principales', [])),
+                # ❌ SUPPRIMÉ : Score_Global, Thematiques_Principales (basés sur scores)
                 'Date_Analyse': entreprise.get('date_analyse', ''),
+                'Activités_Détectées': ', '.join(entreprise.get('thematiques_principales', [])),
             }
             
-            # ✅ EXTRACTION DÉTAILLÉE DES INFORMATIONS
+            # ✅ EXTRACTION DÉTAILLÉE SANS SCORES
             tous_extraits = []
             tous_liens = []
             resume_par_thematique = {}
@@ -111,53 +114,30 @@ class GenerateurRapports:
                                     if url:
                                         liens_thematique.append(url)
                                         tous_liens.append(url)
-                        
-                        # Extraits contextuels du site officiel
-                        if 'extraits_contextuels' in info:
-                            for extrait in info['extraits_contextuels']:
-                                contexte = extrait.get('contexte', '')
-                                mot_cle = extrait.get('mot_cle', '')
-                                
-                                if contexte:
-                                    info_complete = f"[{mot_cle}] {contexte}"
-                                    infos_thematique.append(info_complete)
-                                    tous_extraits.append(f"[{thematique}] {info_complete}")
-                        
-                        # Résumé de contenu du site officiel
-                        if 'resume_contenu' in info:
-                            resume = info['resume_contenu'][:200] + '...' if len(info['resume_contenu']) > 200 else info['resume_contenu']
-                            infos_thematique.append(f"Résumé site: {resume}")
-                            tous_extraits.append(f"[{thematique}] {resume}")
-                        
-                        # URL du site officiel
-                        if 'url' in info and info['url']:
-                            liens_thematique.append(info['url'])
-                            tous_liens.append(info['url'])
                     
                     # Résumé pour cette thématique
-                    resume_par_thematique[thematique] = ' | '.join(infos_thematique[:2])  # Top 2 infos
+                    resume_par_thematique[thematique] = ' | '.join(infos_thematique[:2])
                     
-                    # Colonnes par thématique
-                    ligne[f'{thematique}_Trouvé'] = 'Oui'
-                    ligne[f'{thematique}_Score'] = round(result['score_pertinence'], 2)
-                    ligne[f'{thematique}_Confiance'] = result.get('niveau_confiance', 'N/A')
+                    # ✅ COLONNES PAR THÉMATIQUE SANS SCORES
+                    ligne[f'{thematique}_Détecté'] = 'Oui'
+                    # ❌ SUPPRIMÉ : ligne[f'{thematique}_Score'] 
+                    # ❌ SUPPRIMÉ : ligne[f'{thematique}_Confiance']
                     ligne[f'{thematique}_Sources'] = ', '.join(result.get('sources', []))
-                    ligne[f'{thematique}_Détails'] = resume_par_thematique[thematique]  # ✅ NOUVEAUTÉ
-                    ligne[f'{thematique}_Liens'] = ' | '.join(list(set(liens_thematique))[:2])  # ✅ NOUVEAUTÉ
+                    ligne[f'{thematique}_Détails'] = resume_par_thematique[thematique]
+                    ligne[f'{thematique}_Liens'] = ' | '.join(list(set(liens_thematique))[:2])
                 else:
-                    ligne[f'{thematique}_Trouvé'] = 'Non'
-                    ligne[f'{thematique}_Score'] = 0.0
-                    ligne[f'{thematique}_Confiance'] = 'N/A'
+                    ligne[f'{thematique}_Détecté'] = 'Non'
+                    # ❌ SUPPRIMÉ : Colonnes score/confiance pour "Non"
                     ligne[f'{thematique}_Sources'] = ''
                     ligne[f'{thematique}_Détails'] = ''
                     ligne[f'{thematique}_Liens'] = ''
             
-            # ✅ COLONNES GLOBALES AVEC DÉTAILS
+            # ✅ COLONNES GLOBALES SANS SCORES
             liens_uniques = list(set([lien for lien in tous_liens if lien and lien.startswith('http')]))
             
-            ligne['Résumé_Complet'] = ' | '.join(tous_extraits[:5])  # Top 5 informations
+            ligne['Résumé_Complet'] = ' | '.join(tous_extraits[:5])
             ligne['Nombre_Total_Informations'] = len(tous_extraits)
-            ligne['Liens_Sources_Principaux'] = ' | '.join(liens_uniques[:3])  # Top 3 liens
+            ligne['Liens_Sources_Principaux'] = ' | '.join(liens_uniques[:3])
             ligne['Nombre_Sources_Uniques'] = len(liens_uniques)
             ligne['Première_Source'] = liens_uniques[0] if liens_uniques else ''
             ligne['Activité_Principale'] = self._determiner_activite_principale(resume_par_thematique)
@@ -165,7 +145,7 @@ class GenerateurRapports:
             donnees.append(ligne)
             
         return pd.DataFrame(donnees)
-    
+
     def _determiner_activite_principale(self, resume_par_thematique: Dict[str, str]) -> str:
         """Détermine l'activité principale basée sur les résumés"""
         if not resume_par_thematique:
@@ -180,40 +160,8 @@ class GenerateurRapports:
         
         return "Informations limitées"
         
-    def _creer_dataframe_synthese(self, entreprises: List[Dict]) -> pd.DataFrame:
-        """Création du DataFrame de synthèse thématique"""
-        donnees_synthese = []
-        
-        for thematique in self.thematiques:
-            entreprises_concernees = [
-                e for e in entreprises 
-                if e.get('analyse_thematique', {}).get(thematique, {}).get('trouve', False)
-            ]
-            
-            if entreprises_concernees:
-                scores = [
-                    e['analyse_thematique'][thematique]['score_pertinence']
-                    for e in entreprises_concernees
-                ]
-                
-                ligne = {
-                    'Thématique': thematique.replace('_', ' ').title(),
-                    'Nb_Entreprises': len(entreprises_concernees),
-                    'Pourcentage': round((len(entreprises_concernees) / len(entreprises)) * 100, 1),
-                    'Score_Moyen': round(sum(scores) / len(scores), 2),
-                    'Score_Max': round(max(scores), 2),
-                    'Entreprises_Principales': ', '.join([
-                        e['nom'] for e in sorted(entreprises_concernees, 
-                                               key=lambda x: x['analyse_thematique'][thematique]['score_pertinence'], 
-                                               reverse=True)[:3]
-                    ])
-                }
-                donnees_synthese.append(ligne)
-                
-        return pd.DataFrame(donnees_synthese)
-        
     def _creer_dataframe_thematique(self, entreprises: List[Dict], thematique: str) -> pd.DataFrame:
-        """Création du DataFrame détaillé pour une thématique avec contenu textuel et liens"""
+        """DataFrame thématique SANS SCORES - Seulement entreprises avec cette thématique"""
         donnees_thematique = []
         
         for entreprise in entreprises:
@@ -222,7 +170,7 @@ class GenerateurRapports:
                 
                 result = analyse[thematique]
                 
-                # ✅ EXTRACTION COMPLÈTE DES INFORMATIONS
+                # ✅ EXTRACTION COMPLÈTE DES INFORMATIONS SANS SCORES
                 extraits_textuels = []
                 mots_cles_trouves = []
                 liens_sources = []
@@ -241,17 +189,7 @@ class GenerateurRapports:
                     if 'url' in info and info['url']:
                         liens_sources.append(info['url'])
                     
-                    # 3. Extraits contextuels du site officiel
-                    if 'extraits_contextuels' in info:
-                        for extrait in info['extraits_contextuels']:
-                            details_evenements.append({
-                                'source': 'Site officiel',
-                                'contenu': f"Contexte: {extrait['contexte']}",
-                                'mot_cle': extrait['mot_cle'],
-                                'url': info.get('url', '')
-                            })
-                    
-                    # 4. Extraits des recherches web avec détails
+                    # 3. Extraits avec détails
                     if 'extraits_textuels' in info:
                         for extrait in info['extraits_textuels']:
                             details_evenements.append({
@@ -261,20 +199,10 @@ class GenerateurRapports:
                                 'url': extrait.get('url', ''),
                                 'extrait_complet': extrait.get('extrait_complet', '')
                             })
-                    
-                    # 5. Résumé de contenu du site officiel
-                    if 'resume_contenu' in info:
-                        details_evenements.append({
-                            'source': 'Site officiel - Résumé',
-                            'contenu': info['resume_contenu'],
-                            'url': info.get('url', '')
-                        })
                 
                 # ✅ FORMATAGE DES INFORMATIONS DÉTAILLÉES
-                
-                # Création du texte détaillé avec sources
                 informations_detaillees = []
-                for i, detail in enumerate(details_evenements[:5], 1):  # Top 5 détails
+                for i, detail in enumerate(details_evenements[:5], 1):
                     if detail.get('titre'):
                         info_text = f"[{detail['source']}] {detail['titre']}: {detail['contenu']}"
                     else:
@@ -287,10 +215,8 @@ class GenerateurRapports:
                 
                 # Liens sources uniques
                 liens_uniques = list(set([lien for lien in liens_sources if lien and lien != '']))
-                
-                # Formatage des liens cliquables pour Excel
                 liens_formattes = []
-                for lien in liens_uniques[:3]:  # Top 3 liens
+                for lien in liens_uniques[:3]:
                     if lien.startswith('http'):
                         liens_formattes.append(lien)
                     else:
@@ -301,18 +227,16 @@ class GenerateurRapports:
                     'Commune': entreprise['commune'],
                     'SIRET': entreprise.get('siret', ''),
                     'Secteur': entreprise.get('secteur_naf', ''),
-                    'Score_Pertinence': round(result['score_pertinence'], 2),
-                    'Niveau_Confiance': result.get('niveau_confiance', 'N/A'),
+                    
+                    # ❌ SUPPRIMÉ : Score_Pertinence, Niveau_Confiance
+                    
                     'Sources_Analysées': ', '.join(result.get('sources', [])),
                     'Mots_Cles_Detectés': ', '.join(set(mots_cles_trouves)),
-                    
-                    # ✅ NOUVELLES COLONNES AVEC DÉTAILS
                     'Détails_Informations': ' | '.join(informations_detaillees),
                     'Liens_Sources': ' | '.join(liens_formattes),
                     'Nombre_Sources': len(liens_uniques),
                     'Première_Source': liens_formattes[0] if liens_formattes else '',
-                    'Résumé_Événement': self._extraire_resume_evenement(details_evenements, thematique),
-                    
+                    'Résumé_Activité': self._extraire_resume_evenement(details_evenements, thematique),
                     'Nombre_Mentions': len(details_evenements),
                     'Date_Analyse': entreprise.get('date_analyse', ''),
                     'Site_Web_Entreprise': entreprise.get('site_web', '')
@@ -349,10 +273,13 @@ class GenerateurRapports:
             return f"Activité {thematique}: {' | '.join(contenus)}"
         
     def _creer_dataframe_communes(self, entreprises: List[Dict]) -> pd.DataFrame:
-        """Création du DataFrame de résumé par commune"""
+        """Résumé par commune SANS SCORES - Seulement communes avec activité"""
         communes_stats = {}
         
-        for entreprise in entreprises:
+        # ✅ FILTRAGE : Seulement entreprises actives
+        entreprises_actives = [e for e in entreprises if e.get('score_global', 0) > 0.1]
+        
+        for entreprise in entreprises_actives:  # Seulement les actives
             commune = entreprise.get('commune', 'Inconnue')
             
             if commune not in communes_stats:
@@ -373,27 +300,70 @@ class GenerateurRapports:
         donnees_communes = []
         for commune, stats in communes_stats.items():
             entreprises_commune = stats['entreprises']
-            scores = [e.get('score_global', 0) for e in entreprises_commune]
             
             ligne = {
                 'Commune': commune,
-                'Nb_Entreprises': len(entreprises_commune),
-                'Score_Moyen': round(sum(scores) / len(scores) if scores else 0, 2),
-                'Entreprises_Actives': len([e for e in entreprises_commune if e.get('score_global', 0) > 0.5]),
+                'Nb_Entreprises_Actives': len(entreprises_commune),
+                
+                # ❌ SUPPRIMÉ : Score_Moyen, Entreprises_Actives (basé sur score > 0.5)
+                
+                # ✅ AJOUTÉ : Informations descriptives
+                'Entreprises_Noms': ', '.join([e['nom'] for e in entreprises_commune]),
+                'Secteurs_Présents': ', '.join(list(set([
+                    e.get('secteur_naf', 'Non spécifié').split(' ')[0]  # Premier mot du secteur
+                    for e in entreprises_commune
+                ]))),
             }
             
-            # Ajout des comptages par thématique
+            # Ajout des comptages par thématique (inchangé)
             for thematique in self.thematiques:
                 ligne[f'{thematique}_Count'] = stats['thematiques_count'][thematique]
                 
-            # Thématique dominante
+            # Thématique dominante (sans référence au score)
             thematique_dominante = max(stats['thematiques_count'].items(), key=lambda x: x[1])
             ligne['Thématique_Dominante'] = thematique_dominante[0] if thematique_dominante[1] > 0 else 'Aucune'
             
             donnees_communes.append(ligne)
             
         return pd.DataFrame(donnees_communes)
+
+    def _creer_dataframe_synthese(self, entreprises: List[Dict]) -> pd.DataFrame:
+        """Synthèse SANS SCORES - Focus quantitatif et qualitatif"""
+        donnees_synthese = []
         
+        # ✅ FILTRAGE : Seulement entreprises actives
+        entreprises_actives = [e for e in entreprises if e.get('score_global', 0) > 0.1]
+        
+        for thematique in self.thematiques:
+            entreprises_concernees = [
+                e for e in entreprises_actives
+                if e.get('analyse_thematique', {}).get(thematique, {}).get('trouve', False)
+            ]
+            
+            if entreprises_concernees:
+                ligne = {
+                    'Thématique': thematique.replace('_', ' ').title(),
+                    'Nb_Entreprises_Actives': len(entreprises_concernees),
+                    'Pourcentage_du_Total': round((len(entreprises_concernees) / len(entreprises)) * 100, 1),
+                    'Pourcentage_des_Actives': round((len(entreprises_concernees) / len(entreprises_actives)) * 100, 1),
+                    
+                    # ❌ SUPPRIMÉ : Score_Moyen, Score_Max
+                    
+                    # ✅ AJOUTÉ : Informations qualitatives
+                    'Entreprises_Concernées': ', '.join([
+                        e['nom'] for e in entreprises_concernees[:5]  # Top 5 au lieu de tri par score
+                    ]),
+                    'Secteurs_Représentés': ', '.join(list(set([
+                        e.get('secteur_naf', 'Non spécifié')[:30] + '...' 
+                        if len(e.get('secteur_naf', '')) > 30 
+                        else e.get('secteur_naf', 'Non spécifié')
+                        for e in entreprises_concernees
+                    ])))
+                }
+                donnees_synthese.append(ligne)
+                
+        return pd.DataFrame(donnees_synthese)
+
     def generer_rapport_html(self, entreprises_enrichies: List[Dict]) -> str:
         """Génération d'un rapport HTML interactif"""
         print("🌐 Génération du rapport HTML")
@@ -578,37 +548,32 @@ class GenerateurRapports:
         return html
         
     def _generer_section_entreprises(self, entreprises: List[Dict]) -> str:
-        """Génération de la section détail entreprises avec informations complètes"""
+        """Section entreprises HTML SANS SCORES - Seulement les actives"""
         html = ""
         
-        # Tri par score décroissant
-        entreprises_triees = sorted(
-            entreprises, 
-            key=lambda x: x.get('score_global', 0), 
-            reverse=True
-        )
+        # ✅ FILTRAGE : Seulement entreprises actives
+        entreprises_actives = [e for e in entreprises if e.get('score_global', 0) > 0.1]
+        
+        # Tri par nom au lieu de score
+        entreprises_triees = sorted(entreprises_actives, key=lambda x: x.get('nom', ''))
         
         for entreprise in entreprises_triees:
-            score_global = entreprise.get('score_global', 0)
-            score_class = self._get_score_class(score_global)
-            
             html += f"""
             <div class="entreprise" style="margin-bottom: 30px; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
                 <h4 style="color: #2c3e50; margin-bottom: 10px;">
                     {entreprise['nom']} ({entreprise['commune']})
                 </h4>
                 <div style="display: flex; gap: 20px; margin-bottom: 15px;">
-                    <div><strong>Score global:</strong> <span class="score {score_class}">{score_global:.2f}</span></div>
                     <div><strong>Secteur:</strong> {entreprise.get('secteur_naf', 'Non spécifié')}</div>
                     <div><strong>SIRET:</strong> {entreprise.get('siret', 'N/A')}</div>
                 </div>
                 
                 <div style="margin-bottom: 15px;">
-                    <strong>Thématiques principales:</strong> {', '.join(entreprise.get('thematiques_principales', []))}
+                    <strong>Activités détectées:</strong> {', '.join(entreprise.get('thematiques_principales', []))}
                 </div>
             """
             
-            # ✅ DÉTAILS PAR THÉMATIQUE AVEC INFORMATIONS COMPLÈTES
+            # ✅ DÉTAILS PAR THÉMATIQUE SANS SCORES
             analyse = entreprise.get('analyse_thematique', {})
             thematiques_trouvees = [t for t in self.thematiques if t in analyse and analyse[t].get('trouve', False)]
             
@@ -620,18 +585,15 @@ class GenerateurRapports:
                 
                 for thematique in thematiques_trouvees:
                     result = analyse[thematique]
-                    score = result['score_pertinence']
-                    score_class = self._get_score_class(score)
                     
                     html += f"""
                     <div style="margin: 15px 0; padding: 15px; background-color: #f8f9fa; border-left: 4px solid #3498db;">
                         <h5 style="color: #2c3e50; margin: 0 0 10px 0;">
-                            {thematique.replace('_', ' ').title()} 
-                            <span class="score {score_class}" style="font-size: 0.9em;">(Score: {score:.2f})</span>
+                            {thematique.replace('_', ' ').title()}
                         </h5>
                     """
                     
-                    # Extraction des informations détaillées
+                    # Extraction des informations détaillées SANS SCORES
                     details_info = []
                     liens_sources = []
                     
@@ -647,36 +609,13 @@ class GenerateurRapports:
                                     'contenu': extrait.get('description', ''),
                                     'url': extrait.get('url', '')
                                 })
-                        
-                        # Extraits contextuels du site officiel
-                        if 'extraits_contextuels' in info:
-                            for extrait in info['extraits_contextuels']:
-                                details_info.append({
-                                    'type': 'site',
-                                    'titre': f"Mot-clé: {extrait['mot_cle']}",
-                                    'contenu': extrait['contexte'],
-                                    'url': info.get('url', '')
-                                })
-                        
-                        # Résumé de contenu
-                        if 'resume_contenu' in info:
-                            details_info.append({
-                                'type': 'resume',
-                                'titre': 'Résumé du site officiel',
-                                'contenu': info['resume_contenu'][:200] + '...' if len(info['resume_contenu']) > 200 else info['resume_contenu'],
-                                'url': info.get('url', '')
-                            })
-                        
-                        # Collecte des liens
-                        if 'url' in info and info['url']:
-                            liens_sources.append(info['url'])
                     
-                    # Affichage des détails
+                    # Affichage des détails SANS SCORES
                     if details_info:
                         html += "<div style='margin-top: 10px;'>"
                         
-                        for i, detail in enumerate(details_info[:3], 1):  # Top 3 détails
-                            icon = "🌐" if detail['type'] == 'web' else "📱" if detail['type'] == 'site' else "📝"
+                        for i, detail in enumerate(details_info[:3], 1):
+                            icon = "🌐" if detail['type'] == 'web' else "📱"
                             
                             html += f"""
                             <div style="margin: 8px 0; padding: 8px; background-color: white; border-radius: 4px;">
@@ -701,29 +640,11 @@ class GenerateurRapports:
                         
                         html += "</div>"
                     
-                    # Liens sources supplémentaires
-                    liens_uniques = list(set([lien for lien in liens_sources if lien and lien.startswith('http')]))
-                    if liens_uniques:
-                        html += f"""
-                        <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #ecf0f1;">
-                            <strong>📎 Sources supplémentaires:</strong><br>
-                        """
-                        
-                        for lien in liens_uniques[:3]:  # Top 3 liens
-                            domain = lien.split('/')[2] if '/' in lien else lien
-                            html += f"""
-                            <a href="{lien}" target="_blank" style="display: inline-block; margin: 2px 10px 2px 0; padding: 2px 8px; background-color: #ecf0f1; color: #2c3e50; text-decoration: none; border-radius: 3px; font-size: 0.85em;">
-                                {domain}
-                            </a>
-                            """
-                        
-                        html += "</div>"
-                    
                     html += "</div>"  # Fin de la thématique
                 
                 html += "</div>"  # Fin des détails
             
-            # Site web de l'entreprise
+            # Site web de l'entreprise (inchangé)
             if entreprise.get('site_web'):
                 html += f"""
                 <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ecf0f1;">
