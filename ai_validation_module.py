@@ -87,84 +87,187 @@ class AIValidationModule:
             print(f"❌ Erreur chargement configuration API: {e}")
             raise
     
-    def _get_validation_system_prompt(self) -> str:
-        """✅ PROMPT ÉQUILIBRÉ : Ni trop strict, ni trop permissif"""
-        return """Tu es un expert en veille économique avec une approche ÉQUILIBRÉE et PRAGMATIQUE.
+    # def _get_validation_system_prompt(self) -> str:
+    #     """✅ PROMPT ÉQUILIBRÉ : Ni trop strict, ni trop permissif"""
+    #     return """Tu es un expert en veille économique avec une approche ÉQUILIBRÉE et PRAGMATIQUE.
 
-    OBJECTIF: Valider les résultats pertinents tout en évitant les faux positifs évidents.
+    # OBJECTIF: Valider les résultats pertinents tout en évitant les faux positifs évidents.
 
-    RÈGLES DE VALIDATION ÉQUILIBRÉES:
+    # RÈGLES DE VALIDATION ÉQUILIBRÉES:
 
-    ✅ VALIDER SI:
-    1. Le nom de l'entreprise EST mentionné dans le contenu ET
-    2. Le contenu a un lien logique avec la thématique demandée ET
-    3. C'est dans un contexte professionnel/économique
+    # ✅ VALIDER SI:
+    # 1. Le nom de l'entreprise EST mentionné dans le contenu ET
+    # 2. Le contenu a un lien logique avec la thématique demandée ET
+    # 3. C'est dans un contexte professionnel/économique
 
-    ❌ REJETER SI:
-    1. Contenu complètement hors-sujet (dictionnaires, forums linguistiques)
-    2. Thématique totalement différente (ex: chiffre d'affaires pour "recrutements")
-    3. Mention uniquement administrative sans lien thématique
+    # ❌ REJETER SI:
+    # 1. Contenu complètement hors-sujet (dictionnaires, forums linguistiques)
+    # 2. Thématique totalement différente (ex: chiffre d'affaires pour "recrutements")
+    # 3. Mention uniquement administrative sans lien thématique
 
-    🤔 CAS LIMITES - ACCEPTER AVEC SCORE MODÉRÉ:
-    - Informations générales d'entreprise avec mention indirecte de la thématique
-    - Articles de presse mentionnant l'entreprise dans un contexte lié
-    - Contenus partiellement pertinents mais pas parfaitement alignés
+    # 🤔 CAS LIMITES - ACCEPTER AVEC SCORE MODÉRÉ:
+    # - Informations générales d'entreprise avec mention indirecte de la thématique
+    # - Articles de presse mentionnant l'entreprise dans un contexte lié
+    # - Contenus partiellement pertinents mais pas parfaitement alignés
 
-    EXEMPLES CONCRETS:
+    # EXEMPLES CONCRETS:
 
-    RECRUTEMENTS:
-    ✅ ACCEPTER (score élevé 0.8+):
-    - "CARREFOUR recrute 50 personnes"
-    - "Offres d'emploi chez CARREFOUR"
-    - "CARREFOUR cherche un directeur"
+    # RECRUTEMENTS:
+    # ✅ ACCEPTER (score élevé 0.8+):
+    # - "CARREFOUR recrute 50 personnes"
+    # - "Offres d'emploi chez CARREFOUR"
+    # - "CARREFOUR cherche un directeur"
 
-    🤔 ACCEPTER (score modéré 0.4-0.6):
-    - "CARREFOUR développe ses équipes" (implication recrutement)
-    - "Croissance de CARREFOUR et nouveaux postes" (lien indirect)
-    - "CARREFOUR renforce son organisation" (possible recrutement)
+    # 🤔 ACCEPTER (score modéré 0.4-0.6):
+    # - "CARREFOUR développe ses équipes" (implication recrutement)
+    # - "Croissance de CARREFOUR et nouveaux postes" (lien indirect)
+    # - "CARREFOUR renforce son organisation" (possible recrutement)
 
-    ❌ REJETER (score <0.3):
-    - "Chiffre d'affaires de CARREFOUR" (aucun lien recrutement)
-    - "Adresse de CARREFOUR" (informatif seulement)
+    # ❌ REJETER (score <0.3):
+    # - "Chiffre d'affaires de CARREFOUR" (aucun lien recrutement)
+    # - "Adresse de CARREFOUR" (informatif seulement)
 
-    INNOVATIONS:
-    ✅ ACCEPTER (score élevé):
-    - "CARREFOUR lance un nouveau service"
-    - "Innovation chez CARREFOUR"
-    - "CARREFOUR développe une technologie"
+    # INNOVATIONS:
+    # ✅ ACCEPTER (score élevé):
+    # - "CARREFOUR lance un nouveau service"
+    # - "Innovation chez CARREFOUR"
+    # - "CARREFOUR développe une technologie"
 
-    🤔 ACCEPTER (score modéré):
-    - "CARREFOUR modernise ses magasins" (amélioration = innovation)
-    - "Nouveautés chez CARREFOUR" (possible innovation)
-    - "CARREFOUR investit dans le digital" (lien technologique)
+    # 🤔 ACCEPTER (score modéré):
+    # - "CARREFOUR modernise ses magasins" (amélioration = innovation)
+    # - "Nouveautés chez CARREFOUR" (possible innovation)
+    # - "CARREFOUR investit dans le digital" (lien technologique)
 
-    ❌ REJETER:
-    - "CARREFOUR recrute des développeurs" (thématique = recrutements)
-    - "Résultats financiers CARREFOUR" (pas d'innovation)
+    # ❌ REJETER:
+    # - "CARREFOUR recrute des développeurs" (thématique = recrutements)
+    # - "Résultats financiers CARREFOUR" (pas d'innovation)
 
-    PRINCIPE GÉNÉRAL:
-    - Être PRAGMATIQUE : accepter les contenus raisonnablement liés
-    - Éviter les EXTRÊMES : ni tout rejeter, ni tout accepter
-    - FAIRE CONFIANCE au contexte : si ça peut être lié, c'est probablement valable
-    - Privilégier les FAUX POSITIFS acceptables aux FAUX NÉGATIFS dommageables
+    # PRINCIPE GÉNÉRAL:
+    # - Être PRAGMATIQUE : accepter les contenus raisonnablement liés
+    # - Éviter les EXTRÊMES : ni tout rejeter, ni tout accepter
+    # - FAIRE CONFIANCE au contexte : si ça peut être lié, c'est probablement valable
+    # - Privilégier les FAUX POSITIFS acceptables aux FAUX NÉGATIFS dommageables
 
-    Réponds TOUJOURS en JSON valide:
+    # Réponds TOUJOURS en JSON valide:
+    # {
+    # "is_relevant": [true/false - true si lien raisonnable avec la thématique],
+    # "confidence_score": [0.0-1.0 - moduler selon la pertinence],
+    # "explanation": "Explication claire de la décision",
+    # "extracted_info": {
+    #     "key_facts": ["Faits pertinents extraits"],
+    #     "relevance_level": "high/medium/low",
+    #     "theme_connection": "Comment ça se rapporte à la thématique"
+    # },
+    # "themes_detected": ["Thématiques identifiées"]
+    # }"""
+
+    def _get_pme_validation_prompt(self) -> str:
+        """Prompt IA PME sans biais sectoriel - Focus sur les critères généraux"""
+        return """Tu es un expert en veille économique PME avec une approche RÉALISTE et ÉQUILIBRÉE.
+
+    🏢 MISSION PME : Valider les informations sur PETITES ET MOYENNES ENTREPRISES LOCALES
+
+    🎯 CONTEXTE PME GÉNÉRAL :
+    - Entreprises 1-250 salariés (majoritairement 1-50)
+    - Activité territoriale/locale
+    - Communication souvent informelle
+    - Présence web limitée
+    - Informations fragmentaires mais authentiques
+
+    ✅ CRITÈRES GÉNÉRAUX D'ACCEPTATION PME :
+
+    🔍 RECRUTEMENTS PME :
+    ✅ Toute mention de recherche de personnel (apprenti, stagiaire, employé, cadre)
+    ✅ Offres d'emploi même modestes (temps partiel, saisonnier, CDD court)
+    ✅ Recherche de compétences spécifiques au secteur d'activité
+    ✅ Besoins en formation/alternance
+
+    🎪 ÉVÉNEMENTS PME :
+    ✅ Ouvertures, inaugurations, déménagements
+    ✅ Changements de propriétaire ou de direction
+    ✅ Nouveaux locaux, extensions, modernisations
+    ✅ Participations à salons locaux, événements territoriaux
+
+    💡 INNOVATIONS PME :
+    ✅ Nouveaux services ou prestations (même simples)
+    ✅ Modernisation d'équipements, digitalisation
+    ✅ Nouvelles méthodes de travail ou d'organisation
+    ✅ Améliorations produits, processus ou services
+
+    🏢 VIE ENTREPRISE PME :
+    ✅ Développements commerciaux, nouveaux marchés
+    ✅ Partenariats, collaborations, reprises d'entreprise
+    ✅ Investissements, projets de développement
+    ✅ Changements organisationnels significatifs
+
+    ❌ REJETER UNIQUEMENT SI :
+    - Forums linguistiques (WordReference, dictionnaires)
+    - Cours de langue, grammaire, traductions
+    - Contenu sans lien évident avec l'entreprise ou le territoire
+    - Informations purement techniques sans contexte business
+
+    🎯 PRINCIPE DIRECTEUR PME :
+    "Accepter toute information business authentique, même modeste, 
+    plutôt que d'exiger des standards de grande entreprise"
+
+    📊 BARÈME DE SCORING PME RÉALISTE :
+
+    0.8-1.0 : Information PME précise et récente
+    - Activité clairement documentée
+    - Sources fiables et contextualisées
+    - Impact territorial visible
+
+    0.6-0.7 : Information PME pertinente  
+    - Activité probable et cohérente
+    - Sources correctes mais générales
+    - Lien territorial établi
+
+    0.4-0.5 : Information PME acceptable
+    - Activité possible dans le secteur
+    - Mention de l'entreprise confirmée
+    - Contexte territorial présent
+
+    0.2-0.3 : Information PME minimale
+    - Mention d'entreprise sur le territoire
+    - Activité plausible mais peu documentée
+    - Information basique mais authentique
+
+    <0.2 : Rejeter
+    - Pas de lien avec l'entreprise
+    - Pas de contexte territorial
+    - Information non pertinente
+
+    ⚠️ ADAPTATION SECTORIELLE AUTOMATIQUE :
+    - Commerce : Focus vente, clientèle, concurrence
+    - Services : Focus prestations, clients, expertise  
+    - Production : Focus fabrication, équipements, marchés
+    - BTP : Focus chantiers, matériaux, projets
+    - Santé/Social : Focus patients, soins, réglementation
+    - Mais MÊMES critères de validation pour tous !
+
+    🌍 BONUS TERRITORIAL (crucial pour PME) :
+    +0.2 si commune/code postal mentionné
+    +0.1 si contexte local présent
+    +0.1 si impact territorial identifié
+
+    Réponds en JSON :
     {
-    "is_relevant": [true/false - true si lien raisonnable avec la thématique],
-    "confidence_score": [0.0-1.0 - moduler selon la pertinence],
-    "explanation": "Explication claire de la décision",
-    "extracted_info": {
-        "key_facts": ["Faits pertinents extraits"],
-        "relevance_level": "high/medium/low",
-        "theme_connection": "Comment ça se rapporte à la thématique"
-    },
-    "themes_detected": ["Thématiques identifiées"]
+    "is_relevant": true/false,
+    "confidence_score": 0.0-1.0,
+    "explanation": "Justification basée sur critères PME généraux",
+    "pme_activity_type": "recrutement/evenement/innovation/developpement/autre",
+    "territorial_context": "local/regional/national/absent",
+    "authenticity_level": "elevee/moyenne/faible"
     }"""
 
     # 🔥 REFONTE COMPLÈTE - Remplace validate_search_result dans ai_validation_module.py
 
     def validate_search_result(self, entreprise: Dict, search_result: Dict, theme: str) -> ValidationResult:
-        """🎯 VALIDATION INTELLIGENTE : Rejette les annuaires et faux positifs"""
+        """🏢 VALIDATION SPÉCIALISÉE PME : Adaptée aux petites entreprises locales"""
+
+        # UTILISER POUR DEBUG !
+        print(f"🔥 NOUVEAU CODE PME ACTIVÉ pour {entreprise.get('nom')} - {theme}")
+
         
         titre = search_result.get('titre', '').lower()
         description = search_result.get('description', '').lower()
@@ -172,170 +275,108 @@ class AIValidationModule:
         
         texte_complet = f"{titre} {description} {url}"
         nom_entreprise = entreprise.get('nom', '').lower()
+        commune = entreprise.get('commune', '').lower()
         
-        print(f"🔍 Validation: {titre[:50]}... pour thématique '{theme}'")
+        print(f"🔍 Validation PME: {titre[:50]}... pour thématique '{theme}'")
         
-        # ✅ ÉTAPE 1: EXCLUSIONS STRICTES (Faux positifs évidents)
-        exclusions_strictes = [
-            # Sites d'annuaires/fiches entreprise
-            'societe.com', 'verif.com', 'manageo.fr', 'infonet.fr', 'pagesjaunes.fr',
-            'entreprises.lefigaro.fr', 'qwant.com', '118000.fr', 'kompass.com',
+        # ✅ ÉTAPE 1: EXCLUSIONS SPÉCIFIQUES PME (beaucoup plus permissives)
+        exclusions_strictes_pme = [
+            # Sites génériques seulement
+            'wikipedia.org', 'larousse.fr', 'wordreference.com',
+            'dictionary.com', 'reverso.net',
             
-            # Contenu purement administratif
-            'chiffre d\'affaires', 'bilans', 'statuts', 'sirene', 'kbis',
-            'résultats financiers', 'bilan comptable', 'actionnaires',
-            'numéro tva', 'code ape', 'forme juridique', 'dirigeants',
-            
-            # Sites génériques non pertinents
-            'horaires d\'ouverture', 'adresse téléphone', 'coordonnées',
-            'plan d\'accès', 'itinéraire', 'contact',
-            
-            # Forums/dictionnaires
-            'wordreference', 'larousse', 'dictionary', 'définition'
+            # Forums linguistiques
+            'forum.wordreference', 'conjugaison', 'grammaire',
+            'cours de français', 'leçon de français'
         ]
         
-        for exclusion in exclusions_strictes:
+        # ❌ SUPPRIMÉ : Les exclusions trop strictes pour PME
+        # - 'chiffre d\'affaires' → GARDÉ (souvent seule info PME)
+        # - 'bilans' → GARDÉ (info comptable = activité)
+        # - 'societe.com' → GARDÉ (fiche entreprise = légittime pour PME)
+        
+        for exclusion in exclusions_strictes_pme:
             if exclusion in texte_complet:
                 return ValidationResult(
                     is_relevant=False,
                     confidence_score=0.0,
-                    explanation=f"❌ Exclusion stricte: {exclusion} détectée",
+                    explanation=f"❌ Exclusion PME: {exclusion} détectée",
                     extracted_info={'exclusion_reason': exclusion},
                     themes_detected=[]
                 )
         
-        # ✅ ÉTAPE 2: VALIDATION ENTREPRISE
-        if not self._valider_entreprise_recherchable(entreprise):
+        # ✅ ÉTAPE 2: VALIDATION ENTREPRISE PME (plus permissive)
+        if not self._valider_entreprise_pme_recherchable(entreprise):
             return ValidationResult(
                 is_relevant=False,
                 confidence_score=0.0,
-                explanation="❌ Entreprise non recherchable (personne physique)",
-                extracted_info={'reason': 'entreprise_non_recherchable'},
+                explanation="❌ Entreprise non recherchable (critères PME)",
+                extracted_info={'reason': 'entreprise_non_pme_recherchable'},
                 themes_detected=[]
             )
         
-        # ✅ ÉTAPE 3: VALIDATION THÉMATIQUE STRICTE
-        mots_cles_stricts_par_theme = {
-            'recrutements': {
-                'obligatoires': ['recrut', 'emploi', 'embauche', 'poste', 'cdi', 'cdd', 'stage'],
-                'contexte': ['candidat', 'cv', 'entretien', 'offre', 'carrière', 'équipe']
-            },
-            'evenements': {
-                'obligatoires': ['événement', 'évènement', 'salon', 'conférence', 'porte ouverte'],
-                'contexte': ['rencontre', 'forum', 'manifestation', 'inauguration']
-            },
-            'innovations': {
-                'obligatoires': ['innovation', 'nouveau produit', 'nouveau service', 'lancement'],
-                'contexte': ['développe', 'crée', 'technologie', 'brevets', 'r&d']
-            },
-            'vie_entreprise': {
-                'obligatoires': ['ouverture', 'fermeture', 'expansion', 'partenariat'],
-                'contexte': ['développement', 'projet', 'investissement', 'croissance']
-            }
-        }
+        # ✅ ÉTAPE 3: VALIDATION THÉMATIQUE PME (seuils adaptés)
+        score_thematique = self._calculer_score_thematique_pme(texte_complet, theme)
         
-        theme_config = mots_cles_stricts_par_theme.get(theme, {'obligatoires': [], 'contexte': []})
+        # ✅ ÉTAPE 4: BONUS TERRITORIAL (crucial pour PME)
+        bonus_territorial = self._calculer_bonus_territorial_pme(texte_complet, commune)
         
-        # Recherche mots-clés obligatoires
-        mots_obligatoires_trouves = [mot for mot in theme_config['obligatoires'] if mot in texte_complet]
-        mots_contexte_trouves = [mot for mot in theme_config['contexte'] if mot in texte_complet]
+        # ✅ ÉTAPE 5: VALIDATION ENTREPRISE MENTIONNÉE (adaptée PME)
+        score_entreprise = self._calculer_score_entreprise_pme(texte_complet, nom_entreprise)
         
-        if not mots_obligatoires_trouves and not mots_contexte_trouves:
+        # ✅ ÉTAPE 6: CALCUL SCORE FINAL PME
+        score_final = score_thematique + bonus_territorial + score_entreprise
+        
+        # ✅ SEUIL PME RÉALISTE (beaucoup plus bas)
+        seuil_pme = 0.25  # Au lieu de 0.8+ pour grandes entreprises
+        
+        if score_final >= seuil_pme:
+            return ValidationResult(
+                is_relevant=True,
+                confidence_score=min(score_final, 0.9),  # Max 0.9 pour rester réaliste
+                explanation=f"✅ PME validée: score {score_final:.2f} (seuil PME: {seuil_pme})",
+                extracted_info={
+                    'score_thematique': score_thematique,
+                    'bonus_territorial': bonus_territorial,
+                    'score_entreprise': score_entreprise,
+                    'validation_type': 'pme_specialisee'
+                },
+                themes_detected=[theme]
+            )
+        else:
             return ValidationResult(
                 is_relevant=False,
-                confidence_score=0.0,
-                explanation=f"❌ Aucun mot-clé {theme} trouvé",
-                extracted_info={'theme_words_found': []},
+                confidence_score=score_final,
+                explanation=f"❌ Score PME insuffisant: {score_final:.2f} < {seuil_pme}",
+                extracted_info={'scores_detail': {
+                    'thematique': score_thematique,
+                    'territorial': bonus_territorial,
+                    'entreprise': score_entreprise
+                }},
                 themes_detected=[]
-            )
-        
-        # ✅ ÉTAPE 4: VALIDATION ENTREPRISE MENTIONNÉE
-        mots_entreprise = [mot for mot in nom_entreprise.split() if len(mot) > 2]
-        mots_entreprise_trouves = [mot for mot in mots_entreprise if mot in texte_complet]
-        
-        if len(mots_entreprise) > 0 and len(mots_entreprise_trouves) == 0:
-            return ValidationResult(
-                is_relevant=False,
-                confidence_score=0.0,
-                explanation="❌ Nom entreprise non mentionné",
-                extracted_info={'enterprise_words_found': []},
-                themes_detected=[]
-            )
-        
-        # ✅ ÉTAPE 5: VALIDATION IA FINALE (seulement si tout passe)
-        prompt = self._build_strict_validation_prompt(entreprise, search_result, theme)
-        
-        try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": self._get_strict_validation_prompt()},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=self.max_tokens,
-                temperature=0.0,  # Température 0 = plus déterministe
-                response_format={"type": "json_object"}
-            )
-            
-            result_json = json.loads(response.choices[0].message.content)
-            
-            self.api_calls_count += 1
-            self.tokens_used += response.usage.total_tokens
-            
-            # ✅ SEUIL TRÈS STRICT
-            confidence_threshold = 0.05  # Score élevé requis
-            is_relevant = result_json.get('is_relevant', False)
-            confidence_score = result_json.get('confidence_score', 0.0)
-            
-            if is_relevant and confidence_score >= confidence_threshold:
-                print(f"✅ IA validé: {confidence_score:.2f}")
-                return ValidationResult(
-                    is_relevant=True,
-                    confidence_score=confidence_score,
-                    explanation=f"✅ Validé par IA: {result_json.get('explanation', '')}",
-                    extracted_info=result_json.get('extracted_info', {}),
-                    themes_detected=result_json.get('themes_detected', [])
-                )
-            else:
-                print(f"❌ IA rejeté: {confidence_score:.2f}")
-                return ValidationResult(
-                    is_relevant=False,
-                    confidence_score=confidence_score,
-                    explanation=f"❌ IA: {result_json.get('explanation', '')}",
-                    extracted_info={},
-                    themes_detected=[]
-                )
-                
-        except Exception as e:
-            print(f"❌ Erreur IA: {e}")
-            # En cas d'erreur IA, validation basique stricte
-            return self._validation_basique_stricte(
-                mots_obligatoires_trouves, mots_contexte_trouves, 
-                mots_entreprise_trouves, theme
             )
 
-    def _valider_entreprise_recherchable(self, entreprise: Dict) -> bool:
-        """Validation si l'entreprise est recherchable"""
+    def _valider_entreprise_pme_recherchable(self, entreprise: Dict) -> bool:
+        """Validation PME : beaucoup plus permissive que pour grandes entreprises"""
         nom = entreprise.get('nom', '').upper()
         
-        # Exclusions évidentes
-        exclusions = [
-            'MADAME', 'MONSIEUR', 'MADEMOISELLE', 'M.', 'MME', 'MLLE',
-            'INDIVISION', 'INFORMATION NON-DIFFUSIBLE'
+        # ❌ EXCLUSIONS STRICTES uniquement (très réduites)
+        exclusions_strictes = [
+            'INFORMATION NON-DIFFUSIBLE',
+            'NON DIFFUSIBLE',
+            'CONFIDENTIEL'
         ]
         
-        for exclusion in exclusions:
-            if nom.startswith(exclusion):
-                print(f"❌ Entreprise non recherchable: {exclusion}")
+        for exclusion in exclusions_strictes:
+            if exclusion in nom:
                 return False
         
-        # Doit avoir au moins 2 mots significatifs
-        mots_significatifs = [mot for mot in nom.split() if len(mot) > 2]
-        if len(mots_significatifs) < 2:
-            print(f"❌ Nom trop simple: {nom}")
-            return False
+        # ✅ TRÈS PERMISSIF pour PME
+        # - Personnes physiques → ACCEPTÉES (artisans, professions libérales)
+        # - Noms courts → ACCEPTÉS (ex: "Café de la Gare")
+        # - Sociétés familiales → ACCEPTÉES
         
-        return True
+        return len(nom.strip()) >= 3  # Seuil minimal très bas
 
     def _get_strict_validation_prompt(self) -> str:
         """Prompt IA TRÈS STRICT"""
@@ -439,6 +480,121 @@ class AIValidationModule:
     - Information concrète sur la thématique
 
     Analyse stricte et réponds en JSON."""
+
+    def _calculer_score_thematique_pme(self, texte: str, theme: str) -> float:
+        """Score thématique adapté aux PME avec mots-clés spécialisés"""
+        
+        # 🏢 MOTS-CLÉS PME SPÉCIALISÉS (totalement différents des grandes entreprises)
+        mots_cles_pme = {
+            'recrutements': {
+                'forts': ['cherche', 'recherche', 'recrute', 'embauche'],  # Sans "50 personnes"
+                'moyens': ['apprenti', 'stagiaire', 'saisonnier', 'temps partiel', 'aide'],
+                'faibles': ['équipe', 'personnel', 'candidat', 'cv', 'poste']
+            },
+            
+            'evenements': {
+                'forts': ['ouverture', 'inauguration', 'nouveau', 'porte ouverte'],
+                'moyens': ['déménage', 'agrandit', 'rénove', 'modernise'],
+                'faibles': ['horaires', 'fermeture', 'vacances', 'congés']
+            },
+            
+            'innovations': {
+                'forts': ['nouveau service', 'nouvelle prestation', 'maintenant'],  # PME scale
+                'moyens': ['améliore', 'modernise', 'équipe', 'investit'],
+                'faibles': ['rénove', 'change', 'propose', 'offre']
+            },
+            
+            'vie_entreprise': {
+                'forts': ['reprend', 'cède', 'nouveau propriétaire', 'changement'],
+                'moyens': ['déménage', 'agrandit', 'partenaire', 'collabore'],
+                'faibles': ['développe', 'évolue', 'projet', 'avenir']
+            }
+        }
+        
+        if theme not in mots_cles_pme:
+            return 0.0
+        
+        mots_theme = mots_cles_pme[theme]
+        score = 0.0
+        
+        # Scoring PME adapté
+        for mot in mots_theme['forts']:
+            if mot in texte:
+                score += 0.4  # Score élevé mais réaliste
+        
+        for mot in mots_theme['moyens']:
+            if mot in texte:
+                score += 0.2
+        
+        for mot in mots_theme['faibles']:
+            if mot in texte:
+                score += 0.1
+        
+        return min(score, 0.6)  # Max 0.6 au lieu de 1.0
+
+    def _calculer_bonus_territorial_pme(self, texte: str, commune: str) -> float:
+        """Bonus territorial crucial pour PME (activité hyper-locale)"""
+        
+        if not commune:
+            return 0.0
+        
+        bonus = 0.0
+        commune_lower = commune.lower()
+        
+        # ✅ MENTION COMMUNE (très important pour PME)
+        if commune_lower in texte:
+            bonus += 0.3  # Gros bonus territorial
+        
+        # ✅ INDICATEURS LOCAUX PME
+        indicateurs_locaux = [
+            'local', 'quartier', 'près de', 'centre ville', 'proche',
+            'livraison', 'domicile', 'déplacement', 'secteur'
+        ]
+        
+        for indicateur in indicateurs_locaux:
+            if indicateur in texte:
+                bonus += 0.05  # Petit bonus cumulatif
+        
+        # ✅ CODES POSTAUX (hyper-local PME)
+        codes_postaux_77 = ['77600', '77700', '77400', '77200']  # Vos codes
+        for code in codes_postaux_77:
+            if code in texte:
+                bonus += 0.2
+                break
+        
+        return min(bonus, 0.4)  # Max 0.4
+
+    def _calculer_score_entreprise_pme(self, texte: str, nom_entreprise: str) -> float:
+        """Score entreprise adapté aux noms PME (souvent courts, familiers)"""
+        
+        if not nom_entreprise:
+            return 0.0
+        
+        # ✅ NETTOYAGE SPÉCIAL PME
+        nom_clean = nom_entreprise.replace('MADAME ', '').replace('MONSIEUR ', '')
+        nom_clean = nom_clean.replace('M. ', '').replace('MME ', '')
+        
+        # ✅ MOTS SIGNIFICATIFS PME (seuil très bas)
+        mots_entreprise = [mot for mot in nom_clean.split() if len(mot) > 2]
+        
+        if not mots_entreprise:
+            return 0.0
+        
+        # ✅ COMPTAGE ADAPTÉ PME
+        mots_trouves = 0
+        for mot in mots_entreprise:
+            if mot.lower() in texte:
+                mots_trouves += 1
+        
+        # ✅ SCORING PME RÉALISTE
+        if mots_trouves == 0:
+            return 0.0
+        elif mots_trouves == 1:
+            return 0.2  # Acceptable pour PME
+        elif mots_trouves >= 2:
+            return 0.4  # Très bon pour PME
+        
+        return 0.0
 
     # ✅ DÉSACTIVATION VALIDATION THÉMATIQUE
     def validate_theme_match(self, contenu_texte: str, thematique: str) -> bool:
