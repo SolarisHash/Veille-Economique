@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Module de génération de rapports pour la veille économique
+Version modifiée pour le rapport HTML sans scores
 """
 
 import pandas as pd
@@ -365,31 +366,35 @@ class GenerateurRapports:
         return pd.DataFrame(donnees_synthese)
 
     def generer_rapport_html(self, entreprises_enrichies: List[Dict]) -> str:
-        """Génération d'un rapport HTML interactif"""
-        print("🌐 Génération du rapport HTML")
+        """✅ Génération HTML SANS SCORES - Version adaptée"""
+        print("🌐 Génération du rapport HTML (sans scores)")
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         nom_fichier = f"rapport_veille_{timestamp}.html"
         chemin_fichier = self.dossier_sortie / nom_fichier
         
-        # Statistiques globales
-        stats_globales = self._calculer_statistiques_globales(entreprises_enrichies)
+        # ✅ Statistiques globales SANS SCORES
+        stats_globales = self._calculer_statistiques_sans_scores(entreprises_enrichies)
         
-        # Génération du HTML
-        html_content = self._generer_html_template(entreprises_enrichies, stats_globales)
+        # ✅ Génération du HTML SANS SCORES
+        html_content = self._generer_html_template_sans_scores(entreprises_enrichies, stats_globales)
         
         with open(chemin_fichier, 'w', encoding='utf-8') as f:
             f.write(html_content)
             
         print(f"✅ Rapport HTML généré: {chemin_fichier}")
         return str(chemin_fichier)
+    
+    def _calculer_statistiques_sans_scores(self, entreprises: List[Dict]) -> Dict:
+        """✅ Calcul des statistiques globales SANS SCORES"""
+        # Filtrage entreprises actives (avec activité détectée)
+        entreprises_actives = [e for e in entreprises if e.get('score_global', 0) > 0.1]
         
-    def _calculer_statistiques_globales(self, entreprises: List[Dict]) -> Dict:
-        """Calcul des statistiques globales"""
         stats = {
             'nb_total': len(entreprises),
-            'nb_actives': len([e for e in entreprises if e.get('score_global', 0) > 0.3]),
-            'score_moyen': round(sum(e.get('score_global', 0) for e in entreprises) / len(entreprises), 2),
+            'nb_actives': len(entreprises_actives),
+            # ❌ SUPPRIMÉ : 'score_moyen' - remplacé par pourcentage d'activité
+            'pourcentage_actives': round((len(entreprises_actives) / len(entreprises)) * 100, 1) if len(entreprises) > 0 else 0,
             'nb_communes': len(set(e.get('commune', '') for e in entreprises)),
             'thematiques_stats': {}
         }
@@ -406,8 +411,8 @@ class GenerateurRapports:
             
         return stats
         
-    def _generer_html_template(self, entreprises: List[Dict], stats: Dict) -> str:
-        """Génération du template HTML"""
+    def _generer_html_template_sans_scores(self, entreprises: List[Dict], stats: Dict) -> str:
+        """✅ Génération du template HTML SANS SCORES"""
         html = f"""
         <!DOCTYPE html>
         <html lang="fr">
@@ -422,10 +427,8 @@ class GenerateurRapports:
                 .stat-box {{ background-color: #ecf0f1; padding: 15px; border-radius: 5px; text-align: center; }}
                 .thematique {{ margin: 20px 0; padding: 15px; border-left: 4px solid #3498db; }}
                 .entreprise {{ margin: 10px 0; padding: 10px; background-color: #f8f9fa; border-radius: 3px; }}
-                .score {{ font-weight: bold; }}
-                .score.high {{ color: #27ae60; }}
-                .score.medium {{ color: #f39c12; }}
-                .score.low {{ color: #e74c3c; }}
+                .activite {{ font-weight: bold; color: #27ae60; }}
+                .info-entreprise {{ color: #34495e; font-size: 0.9em; margin-top: 5px; }}
                 table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
                 th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
                 th {{ background-color: #f2f2f2; }}
@@ -444,11 +447,11 @@ class GenerateurRapports:
                 </div>
                 <div class="stat-box">
                     <h3>{stats['nb_actives']}</h3>
-                    <p>Entreprises actives</p>
+                    <p>Entreprises avec activité</p>
                 </div>
                 <div class="stat-box">
-                    <h3>{stats['score_moyen']}</h3>
-                    <p>Score moyen</p>
+                    <h3>{stats['pourcentage_actives']}%</h3>
+                    <p>Taux d'activité détectée</p>
                 </div>
                 <div class="stat-box">
                     <h3>{stats['nb_communes']}</h3>
@@ -457,21 +460,21 @@ class GenerateurRapports:
             </div>
             
             <h2>📊 Synthèse par Thématique</h2>
-            {self._generer_section_thematiques(entreprises, stats)}
+            {self._generer_section_thematiques_sans_scores(entreprises, stats)}
             
             <h2>🏘️ Résumé par Commune</h2>
-            {self._generer_section_communes(entreprises)}
+            {self._generer_section_communes_sans_scores(entreprises)}
             
             <h2>📋 Détail des Entreprises</h2>
-            {self._generer_section_entreprises(entreprises)}
+            {self._generer_section_entreprises_sans_scores(entreprises)}
             
         </body>
         </html>
         """
         return html
         
-    def _generer_section_thematiques(self, entreprises: List[Dict], stats: Dict) -> str:
-        """Génération de la section thématiques"""
+    def _generer_section_thematiques_sans_scores(self, entreprises: List[Dict], stats: Dict) -> str:
+        """✅ Génération de la section thématiques SANS SCORES"""
         html = ""
         
         for thematique in self.thematiques:
@@ -489,21 +492,26 @@ class GenerateurRapports:
                     <div style="margin-top: 10px;">
                 """
                 
-                # Top 3 des entreprises
-                top_entreprises = sorted(
-                    entreprises_thematique, 
-                    key=lambda x: x['analyse_thematique'][thematique]['score_pertinence'], 
-                    reverse=True
-                )[:3]
+                # ✅ Top entreprises SANS SCORES (par ordre alphabétique)
+                top_entreprises = sorted(entreprises_thematique, key=lambda x: x.get('nom', ''))[:3]
                 
                 for entreprise in top_entreprises:
-                    score = entreprise['analyse_thematique'][thematique]['score_pertinence']
-                    score_class = self._get_score_class(score)
+                    # ✅ Extraction d'informations détaillées au lieu du score
+                    analyse = entreprise.get('analyse_thematique', {})
+                    details_thematique = analyse.get(thematique, {}).get('details', [])
+                    
+                    # Résumé de l'activité pour cette thématique
+                    resume_activite = "Activité détectée"
+                    if details_thematique:
+                        info = details_thematique[0].get('informations', {})
+                        extraits = info.get('extraits_textuels', [])
+                        if extraits and extraits[0].get('titre'):
+                            resume_activite = extraits[0]['titre'][:50] + "..."
                     
                     html += f"""
                     <div class="entreprise">
                         <strong>{entreprise['nom']}</strong> ({entreprise['commune']})
-                        <span class="score {score_class}">Score: {score:.2f}</span>
+                        <div class="activite">{resume_activite}</div>
                     </div>
                     """
                     
@@ -511,44 +519,59 @@ class GenerateurRapports:
                 
         return html
         
-    def _generer_section_communes(self, entreprises: List[Dict]) -> str:
-        """Génération de la section communes"""
+    def _generer_section_communes_sans_scores(self, entreprises: List[Dict]) -> str:
+        """✅ Génération de la section communes SANS SCORES"""
         communes_data = {}
         
-        for entreprise in entreprises:
+        # Seulement les entreprises avec activité
+        entreprises_actives = [e for e in entreprises if e.get('score_global', 0) > 0.1]
+        
+        for entreprise in entreprises_actives:
             commune = entreprise.get('commune', 'Inconnue')
             if commune not in communes_data:
                 communes_data[commune] = []
             communes_data[commune].append(entreprise)
             
-        html = "<table><tr><th>Commune</th><th>Entreprises</th><th>Score Moyen</th><th>Thématiques Actives</th></tr>"
+        html = "<table><tr><th>Commune</th><th>Entreprises</th><th>Activités Principales</th><th>Thématiques Actives</th></tr>"
         
         for commune, entreprises_commune in communes_data.items():
-            scores = [e.get('score_global', 0) for e in entreprises_commune]
-            score_moyen = sum(scores) / len(scores) if scores else 0
-            
-            # Comptage thématiques actives
+            # ✅ Thématiques actives SANS SCORES
             thematiques_actives = set()
+            activites_principales = []
+            
             for entreprise in entreprises_commune:
                 analyse = entreprise.get('analyse_thematique', {})
                 for thematique in self.thematiques:
                     if analyse.get(thematique, {}).get('trouve', False):
-                        thematiques_actives.add(thematique)
-                        
+                        thematiques_actives.add(thematique.replace('_', ' ').title())
+                
+                # Activité principale de l'entreprise
+                thematiques_entreprise = [
+                    t for t in self.thematiques 
+                    if analyse.get(t, {}).get('trouve', False)
+                ]
+                if thematiques_entreprise:
+                    activites_principales.append(thematiques_entreprise[0].replace('_', ' ').title())
+            
+            # ✅ Résumé des activités principales
+            from collections import Counter
+            activites_counter = Counter(activites_principales)
+            top_activites = [f"{act} ({count})" for act, count in activites_counter.most_common(3)]
+            
             html += f"""
             <tr>
                 <td><strong>{commune}</strong></td>
-                <td>{len(entreprises_commune)}</td>
-                <td><span class="score {self._get_score_class(score_moyen)}">{score_moyen:.2f}</span></td>
-                <td>{len(thematiques_actives)}</td>
+                <td>{len(entreprises_commune)} entreprises actives</td>
+                <td>{', '.join(top_activites) if top_activites else 'Aucune'}</td>
+                <td>{len(thematiques_actives)} thématiques</td>
             </tr>
             """
             
         html += "</table>"
         return html
-        
-    def _generer_section_entreprises(self, entreprises: List[Dict]) -> str:
-        """Section entreprises HTML SANS SCORES - Seulement les actives"""
+
+    def _generer_section_entreprises_sans_scores(self, entreprises: List[Dict]) -> str:
+        """✅ Section entreprises HTML SANS SCORES - Seulement les actives"""
         html = ""
         
         # ✅ FILTRAGE : Seulement entreprises actives
@@ -659,44 +682,6 @@ class GenerateurRapports:
             
         return html
 
-    def _ajouter_section_linkedin(self, entreprises):
-        """Ajoute une section LinkedIn aux rapports"""
-        
-        # Pour le rapport Excel
-        colonnes_linkedin = [
-            'LinkedIn_Présent', 'LinkedIn_Followers', 'LinkedIn_Posts_Récents',
-            'LinkedIn_Themes', 'LinkedIn_Engagement_Moyen', 'LinkedIn_URL'
-        ]
-        
-        for entreprise in entreprises:
-            linkedin_data = entreprise.get('linkedin_data', {})
-            
-            if linkedin_data:
-                entreprise['LinkedIn_Présent'] = 'Oui'
-                entreprise['LinkedIn_Followers'] = linkedin_data.get('profil_entreprise', {}).get('followers', '')
-                entreprise['LinkedIn_Posts_Récents'] = linkedin_data.get('nombre_posts', 0)
-                entreprise['LinkedIn_Themes'] = ', '.join(linkedin_data.get('analyse_posts', {}).get('themes_detectes', []))
-                
-                # Résumé des posts pertinents
-                posts_pertinents = linkedin_data.get('analyse_posts', {}).get('posts_pertinents', [])
-                if posts_pertinents:
-                    entreprise['LinkedIn_Résumé_Posts'] = ' | '.join([
-                        f"[{', '.join(post['themes'])}] {post['texte'][:100]}..."
-                        for post in posts_pertinents[:2]
-                    ])
-            else:
-                entreprise['LinkedIn_Présent'] = 'Non'
-                entreprise['LinkedIn_Posts_Récents'] = 0
-
-    def _get_score_class(self, score: float) -> str:
-        """Détermination de la classe CSS selon le score"""
-        if score >= 0.7:
-            return "high"
-        elif score >= 0.4:
-            return "medium"
-        else:
-            return "low"
-            
     def generer_export_json(self, entreprises_enrichies: List[Dict]) -> str:
         """Export des données en format JSON avec gestion des types non sérialisables"""
         print("📄 Export JSON")
@@ -713,7 +698,8 @@ class GenerateurRapports:
                 'version': '1.0.0'
             },
             'entreprises': self._nettoyer_pour_json(entreprises_enrichies),
-            'statistiques': self._calculer_statistiques_globales(entreprises_enrichies)
+            # ✅ Statistiques SANS SCORES pour JSON
+            'statistiques': self._calculer_statistiques_sans_scores(entreprises_enrichies)
         }
         
         with open(chemin_fichier, 'w', encoding='utf-8') as f:
@@ -763,7 +749,7 @@ class GenerateurRapports:
             return str(obj)
         
     def generer_alertes_communes(self, entreprises_enrichies: List[Dict]) -> str:
-        """Génération d'alertes ciblées par commune"""
+        """✅ Génération d'alertes ciblées par commune SANS SCORES"""
         print("🚨 Génération d'alertes par commune")
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -780,28 +766,33 @@ class GenerateurRapports:
                 communes_data[commune] = []
             communes_data[commune].append(entreprise)
             
-        # Génération des alertes
+        # Génération des alertes SANS SCORES
         for commune, entreprises_commune in communes_data.items():
             alertes_commune = []
             
-            # Alertes pour nouvelles activités
-            for entreprise in entreprises_commune:
-                if entreprise.get('score_global', 0) > 0.6:
-                    thematiques_actives = [
-                        thematique for thematique in entreprise.get('thematiques_principales', [])
-                        if thematique in ['recrutements', 'innovations', 'vie_entreprise']
-                    ]
+            # ✅ Alertes pour nouvelles activités (basées sur présence d'activité, pas score)
+            entreprises_actives = [e for e in entreprises_commune if e.get('score_global', 0) > 0.1]
+            
+            for entreprise in entreprises_actives:
+                thematiques_actives = [
+                    thematique for thematique in self.thematiques
+                    if entreprise.get('analyse_thematique', {}).get(thematique, {}).get('trouve', False)
+                    and thematique in ['recrutements', 'innovations', 'vie_entreprise']
+                ]
+                
+                if thematiques_actives:
+                    # ✅ Priorité basée sur nombre de thématiques, pas sur score
+                    priorite = 'haute' if len(thematiques_actives) >= 2 else 'moyenne'
                     
-                    if thematiques_actives:
-                        alertes_commune.append({
-                            'type': 'activite_elevee',
-                            'entreprise': entreprise['nom'],
-                            'score': entreprise['score_global'],
-                            'thematiques': thematiques_actives,
-                            'priorite': 'haute' if entreprise['score_global'] > 0.8 else 'moyenne'
-                        })
+                    alertes_commune.append({
+                        'type': 'activite_detectee',
+                        'entreprise': entreprise['nom'],
+                        'thematiques': thematiques_actives,
+                        'nb_thematiques': len(thematiques_actives),
+                        'priorite': priorite
+                    })
                         
-            # Alertes spécifiques par thématique
+            # ✅ Alertes spécifiques par thématique SANS SCORES
             for thematique in ['recrutements', 'innovations']:
                 entreprises_thematique = [
                     e for e in entreprises_commune
@@ -836,7 +827,7 @@ class GenerateurRapports:
         
         rapports = {}
         
-        # 1. Rapport Excel (prioritaire)
+        # 1. Rapport Excel (prioritaire) - AVEC SCORES
         try:
             print("📊 Génération rapport Excel...")
             rapports['excel'] = self.generer_rapport_excel(entreprises_enrichies)
@@ -844,15 +835,15 @@ class GenerateurRapports:
             print(f"❌ Erreur rapport Excel: {str(e)}")
             rapports['excel'] = f"ERREUR: {str(e)}"
         
-        # 2. Rapport HTML
+        # 2. Rapport HTML - ✅ SANS SCORES
         try:
-            print("🌐 Génération rapport HTML...")
+            print("🌐 Génération rapport HTML (sans scores)...")
             rapports['html'] = self.generer_rapport_html(entreprises_enrichies)
         except Exception as e:
             print(f"❌ Erreur rapport HTML: {str(e)}")
             rapports['html'] = f"ERREUR: {str(e)}"
         
-        # 3. Export JSON (avec gestion spéciale des Timestamp)
+        # 3. Export JSON (avec gestion spéciale des Timestamp) - SANS SCORES pour statistiques
         try:
             print("📄 Génération export JSON...")
             rapports['json'] = self.generer_export_json(entreprises_enrichies)
@@ -860,7 +851,7 @@ class GenerateurRapports:
             print(f"❌ Erreur export JSON: {str(e)}")
             rapports['json'] = f"ERREUR: {str(e)}"
         
-        # 4. Alertes communes
+        # 4. Alertes communes - SANS SCORES
         try:
             print("🚨 Génération alertes communes...")
             rapports['alertes'] = self.generer_alertes_communes(entreprises_enrichies)
