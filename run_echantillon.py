@@ -29,7 +29,7 @@ def main():
     # Configuration
     fichier_excel = "data/input/entreprises_base.xlsx"
     # fichier_excel = "data/input/entreprises_test_reelles.xlsx"
-    nb_entreprises = 50
+    nb_entreprises = 100
     
     # Vérifications préalables
     if not os.path.exists(fichier_excel):

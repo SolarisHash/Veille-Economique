@@ -73,6 +73,25 @@ class RechercheWeb:
         self.google_blocked_count = 0
         self.last_google_call = None
 
+        self.sources_locales_77 = {
+            'presse': [
+                'site:leparisien.fr/seine-et-marne',
+                'site:larepublique77.fr',
+                'site:francebleu.fr/ile-de-france',
+                'site:actu.fr "Seine-et-Marne"',
+                'site:magcentre.fr'  # Marne-la-Vallée
+            ],
+            'institutionnels': [
+                'site:seineetmarne.cci.fr',
+                'site:cma77.fr',
+                'site:seineetmarne-developpement.fr'
+            ],
+            'economiques': [
+                'site:medef77.fr',
+                'site:bpifrance.fr "Seine-et-Marne"'
+            ]
+        }
+
     def _recherche_web_generale(self, entreprise: Dict) -> Optional[Dict]:
         """✅ CORRIGÉ : Recherche web TOUJOURS ciblée sur l'entreprise"""
         try:
@@ -186,7 +205,6 @@ class RechercheWeb:
         
         # Au moins 1 mot significatif suffit maintenant
         return len(mots_significatifs) >= 1
-    
 
     def _construire_requetes_intelligentes(self, nom_entreprise: str, commune: str, thematique: str) -> List[str]:
         """✅ REQUÊTES INTELLIGENTES adaptées aux noms complexes d'entreprises"""
@@ -525,7 +543,7 @@ class RechercheWeb:
         })
 
     def rechercher_entreprise(self, entreprise: Dict, logger=None) -> Dict:
-        """Recherche complète avec logging détaillé"""
+        """Recherche complète avec logging détaillé + sources locales Seine-et-Marne"""
         nom_entreprise = entreprise['nom']
         
         # ✅ VARIABLES DE TRACKING
@@ -536,7 +554,7 @@ class RechercheWeb:
         resultats_valides_count = 0
         erreurs_recherche = []
         
-        # Votre code de recherche existant...
+        # Structure de résultats
         resultats = {
             'entreprise': entreprise,
             'timestamp': datetime.now().isoformat(),
@@ -546,15 +564,29 @@ class RechercheWeb:
         }
         
         try:
-            # 1. Site web officiel (comme avant)
+            print(f"  🏢 Recherche complète pour: {nom_entreprise} ({entreprise['commune']})")
+            
+            # ✅ ÉTAPE 1: SITE WEB OFFICIEL
             if entreprise.get('site_web'):
-                # Votre code existant...
-                pass
-                
-            # 2. Recherche web générale AVEC tracking
+                try:
+                    print(f"    🌐 Analyse site officiel: {entreprise['site_web']}")
+                    donnees_site = self._analyser_site_officiel(entreprise['site_web'])
+                    if donnees_site:
+                        resultats['donnees_thematiques']['site_officiel'] = donnees_site
+                        resultats['sources_analysees'].append('site_officiel')
+                        print(f"    ✅ Site officiel analysé: {len(donnees_site)} thématiques")
+                        if logger:
+                            logger.log_probleme(nom_entreprise, "Site officiel", "Analysé avec succès")
+                except Exception as e:
+                    erreurs_recherche.append(f"Site officiel: {str(e)}")
+                    print(f"    ⚠️ Erreur site officiel: {e}")
+            
+            # ✅ ÉTAPE 2: RECHERCHE WEB GÉNÉRALE avec tracking
             print(f"    🌐 Recherche web générale...")
             
             for thematique in ['recrutements', 'evenements', 'innovations', 'vie_entreprise']:
+                print(f"      🎯 {thematique}...")
+                
                 # ✅ GÉNÉRATION REQUÊTES AVEC LOG
                 requetes_thematique = self._construire_requetes_intelligentes(
                     nom_entreprise, entreprise['commune'], thematique
@@ -562,8 +594,9 @@ class RechercheWeb:
                 requetes_generees.extend(requetes_thematique)
                 
                 for requete in requetes_thematique[:1]:  # 1 requête par thématique
-                    # ✅ TEST MOTEURS AVEC TRACKING
                     resultats_moteur = None
+                    
+                    # ✅ TEST MOTEURS AVEC TRACKING
                     
                     # Test Bing d'abord
                     moteurs_testes.append('bing')
@@ -627,22 +660,109 @@ class RechercheWeb:
                     
                     time.sleep(2)  # Délai entre requêtes
             
-            # ✅ LOGGING DES RÉSULTATS DE RECHERCHE
+            # ✅ ÉTAPE 3: NOUVEAU - RECHERCHE SOURCES LOCALES SEINE-ET-MARNE
+            try:
+                print(f"    🏘️ Recherche sources locales Seine-et-Marne...")
+                resultats_locaux = self._rechercher_sources_locales_77(entreprise)
+                
+                if resultats_locaux:
+                    print(f"    📰 Sources locales trouvées: {list(resultats_locaux.keys())}")
+                    
+                    # Fusion avec les résultats existants
+                    for thematique, donnees_locales in resultats_locaux.items():
+                        if thematique in resultats['donnees_thematiques']:
+                            # ✅ FUSION avec résultats existants
+                            resultats_existants = resultats['donnees_thematiques'][thematique]
+                            
+                            # Ajouter les extraits locaux
+                            if 'extraits_textuels' in resultats_existants and 'extraits_textuels' in donnees_locales:
+                                resultats_existants['extraits_textuels'].extend(donnees_locales['extraits_textuels'])
+                            
+                            # Ajouter les URLs locales
+                            if 'urls' in resultats_existants and 'urls' in donnees_locales:
+                                resultats_existants['urls'].extend(donnees_locales['urls'])
+                            
+                            # Mettre à jour la pertinence (prendre le max)
+                            if 'pertinence' in resultats_existants:
+                                resultats_existants['pertinence'] = max(
+                                    resultats_existants['pertinence'], 
+                                    donnees_locales.get('pertinence', 0)
+                                )
+                            
+                            # Ajouter indicateur source locale
+                            resultats_existants['sources_locales'] = True
+                            resultats_existants['bonus_local'] = donnees_locales.get('bonus_local', 0)
+                            
+                            print(f"      🔄 {thematique}: fusionné avec résultats existants")
+                            
+                        else:
+                            # ✅ NOUVEAUX résultats locaux uniquement
+                            resultats['donnees_thematiques'][thematique] = donnees_locales
+                            print(f"      ✅ {thematique}: nouveaux résultats locaux")
+                    
+                    # Comptage total des résultats locaux
+                    nb_resultats_locaux = sum(
+                        len(d.get('extraits_textuels', [])) 
+                        for d in resultats_locaux.values()
+                    )
+                    print(f"    ✅ Sources locales: {nb_resultats_locaux} résultats ajoutés")
+                    resultats['sources_analysees'].append('sources_locales_77')
+                    
+                else:
+                    print(f"    ⚪ Aucun résultat dans les sources locales")
+                    
+            except Exception as e:
+                print(f"    ⚠️ Erreur sources locales: {e}")
+                erreurs_recherche.append(f"Sources locales: {str(e)}")
+            
+            # ✅ ÉTAPE 4: ENRICHISSEMENT SECTORIEL (si peu de résultats)
+            nb_resultats_total = len(resultats.get('donnees_thematiques', {}))
+            
+            if nb_resultats_total < 2:
+                try:
+                    print(f"    📊 Enrichissement sectoriel (peu de résultats: {nb_resultats_total})")
+                    donnees_secteur = self._generer_donnees_sectorielles_ameliorees(entreprise)
+                    
+                    if donnees_secteur:
+                        for thematique, donnees in donnees_secteur.items():
+                            if thematique not in resultats['donnees_thematiques']:
+                                resultats['donnees_thematiques'][thematique] = donnees
+                                print(f"      ✅ Enrichissement {thematique} ajouté")
+                        
+                        resultats['sources_analysees'].append('enrichissement_sectoriel')
+                        
+                except Exception as e:
+                    print(f"    ⚠️ Erreur enrichissement: {e}")
+                    erreurs_recherche.append(f"Enrichissement: {str(e)}")
+            
+            # ✅ LOGGING DES RÉSULTATS FINAUX
             if logger:
+                # Déduplication des moteurs testés
+                moteurs_uniques = list(dict.fromkeys(moteurs_testes))
+                
                 logger.log_recherche_web(
                     nom_entreprise=nom_entreprise,
                     requetes=requetes_generees,
-                    moteurs_testes=list(set(moteurs_testes)),  # Dédupliqué
+                    moteurs_testes=moteurs_uniques,
                     moteur_reussi=moteur_reussi,
                     nb_bruts=resultats_bruts_count,
                     nb_valides=resultats_valides_count,
                     erreurs=erreurs_recherche
                 )
             
+            # ✅ RÉSUMÉ FINAL
+            nb_thematiques_finales = len(resultats.get('donnees_thematiques', {}))
+            nb_sources_analysees = len(resultats.get('sources_analysees', []))
+            
+            print(f"  📊 Recherche terminée: {nb_thematiques_finales} thématiques, {nb_sources_analysees} sources")
+            
+            if nb_thematiques_finales > 0:
+                print(f"    🎯 Thématiques trouvées: {list(resultats['donnees_thematiques'].keys())}")
+            
             return resultats
             
         except Exception as e:
-            print(f"    ❌ Erreur recherche générale: {e}")
+            print(f"  ❌ Erreur recherche générale: {e}")
             if logger:
                 logger.log_extraction_resultats(nom_entreprise, False, str(e))
             resultats['erreurs'].append(f"Erreur générale: {str(e)}")
@@ -730,7 +850,192 @@ class RechercheWeb:
         except Exception as e:
             print(f"      ⚠️  Erreur site officiel: {str(e)}")
             return None
+
+    def _rechercher_sources_locales_77(self, entreprise: Dict) -> Optional[Dict]:
+        """✅ NOUVELLE MÉTHODE : Recherche dans les sources locales Seine-et-Marne"""
+        try:
+            nom_entreprise = entreprise['nom']
+            commune = entreprise['commune']
             
+            print(f"      🎯 Sources locales pour: {nom_entreprise} ({commune})")
+            
+            resultats_locaux = {}
+            
+            # Recherche par thématique dans les sources locales
+            thematiques_locales = ['recrutements', 'evenements', 'vie_entreprise', 'innovations']
+            
+            for thematique in thematiques_locales:
+                print(f"        🔍 {thematique} dans sources 77...")
+                
+                # Construction des requêtes spécifiques aux sources locales
+                requetes_locales = self._construire_requetes_sources_locales(nom_entreprise, commune, thematique)
+                
+                resultats_thematique = []
+                
+                for requete in requetes_locales[:2]:  # Max 2 requêtes par thématique
+                    try:
+                        print(f"          📰 Requête locale: {requete}")
+                        
+                        # Utiliser votre moteur existant
+                        resultats_requete = self._rechercher_moteur(requete)
+                        
+                        if resultats_requete:
+                            # Validation spéciale pour sources locales (plus permissive)
+                            resultats_valides = self._valider_resultats_sources_locales(
+                                resultats_requete, nom_entreprise, commune, thematique
+                            )
+                            
+                            if resultats_valides:
+                                resultats_thematique.extend(resultats_valides)
+                                print(f"          ✅ {len(resultats_valides)} résultats locaux validés")
+                        
+                        time.sleep(random.uniform(2, 4))  # Délai entre requêtes
+                        
+                    except Exception as e:
+                        print(f"          ❌ Erreur requête locale: {e}")
+                        continue
+                
+                # Si des résultats trouvés pour cette thématique
+                if resultats_thematique:
+                    score_local = min(len(resultats_thematique) * 0.4, 0.8)  # Score plus élevé pour sources locales
+                    
+                    resultats_locaux[thematique] = {
+                        'mots_cles_trouves': [thematique, 'seine-et-marne', 'local'],
+                        'urls': list(set([r['url'] for r in resultats_thematique if r.get('url')])),
+                        'pertinence': score_local,
+                        'extraits_textuels': resultats_thematique,
+                        'type': 'sources_locales_77',
+                        'bonus_local': 0.3  # Bonus pour source locale
+                    }
+                    print(f"        🎉 {thematique} local validé (score: {score_local:.2f})")
+            
+            return resultats_locaux if resultats_locaux else None
+            
+        except Exception as e:
+            print(f"      ❌ Erreur sources locales: {e}")
+            return None
+
+    def _construire_requetes_sources_locales(self, nom_entreprise: str, commune: str, thematique: str) -> List[str]:
+        """✅ NOUVELLE MÉTHODE : Construction de requêtes pour sources locales"""
+        requetes = []
+        
+        # Nettoyage du nom d'entreprise
+        nom_clean = nom_entreprise.replace('"', '').replace("'", "").strip()
+        
+        print(f"          🛠️ Construction requêtes locales: {nom_clean} / {commune} / {thematique}")
+        
+        # Stratégie 1: Recherche dans la presse locale
+        for source_presse in self.sources_locales_77['presse']:
+            if thematique == 'recrutements':
+                requetes.append(f'{source_presse} "{nom_clean}" {commune} emploi')
+                requetes.append(f'{source_presse} "{nom_clean}" recrutement')
+            elif thematique == 'evenements':
+                requetes.append(f'{source_presse} "{nom_clean}" {commune} ouverture')
+                requetes.append(f'{source_presse} "{nom_clean}" événement')
+            elif thematique == 'vie_entreprise':
+                requetes.append(f'{source_presse} "{nom_clean}" {commune} entreprise')
+                requetes.append(f'{source_presse} "{nom_clean}" développement')
+            elif thematique == 'innovations':
+                requetes.append(f'{source_presse} "{nom_clean}" innovation')
+                requetes.append(f'{source_presse} "{nom_clean}" nouveau')
+        
+        # Stratégie 2: Sources institutionnelles (pour certaines thématiques)
+        if thematique in ['vie_entreprise', 'aides_subventions']:
+            for source_instit in self.sources_locales_77['institutionnels']:
+                requetes.append(f'{source_instit} "{nom_clean}"')
+        
+        # Stratégie 3: Recherche par commune + secteur (si nom entreprise complexe)
+        if len(nom_clean) > 30:  # Nom trop long/complexe
+            secteur_simplifie = self._detecter_secteur_activite(nom_clean)
+            if secteur_simplifie:
+                requetes.append(f'site:leparisien.fr {commune} {secteur_simplifie} {thematique}')
+                requetes.append(f'site:larepublique77.fr {commune} {secteur_simplifie}')
+        
+        # Nettoyage et limitation
+        requetes_finales = [req for req in requetes if len(req) > 20 and len(req) < 150]
+        requetes_dedupliquees = list(dict.fromkeys(requetes_finales))  # Déduplique en gardant l'ordre
+        
+        print(f"          ✅ {len(requetes_dedupliquees)} requêtes locales générées")
+        
+        return requetes_dedupliquees[:4]  # Max 4 requêtes locales
+
+    def _valider_resultats_sources_locales(self, resultats: List[Dict], nom_entreprise: str, 
+                                        commune: str, thematique: str) -> List[Dict]:
+        """✅ NOUVELLE MÉTHODE : Validation spéciale pour sources locales (plus permissive)"""
+        if not resultats:
+            return []
+        
+        print(f"          🔍 Validation sources locales: {len(resultats)} résultats")
+        
+        resultats_valides = []
+        nom_lower = nom_entreprise.lower()
+        commune_lower = commune.lower()
+        
+        for i, resultat in enumerate(resultats):
+            try:
+                titre = resultat.get('titre', '').lower()
+                description = resultat.get('description', '').lower()
+                url = resultat.get('url', '').lower()
+                
+                texte_complet = f"{titre} {description} {url}"
+                
+                # ✅ VALIDATION SPÉCIALE SOURCES LOCALES (plus permissive)
+                
+                # 1. Bonus si source locale détectée
+                est_source_locale = any(source in url for source in [
+                    'leparisien.fr', 'larepublique77.fr', 'francebleu.fr', 
+                    'actu.fr', 'cci.fr', 'cma77.fr'
+                ])
+                
+                if est_source_locale:
+                    print(f"            ✅ Source locale détectée: {url}")
+                    
+                    # 2. Validation plus permissive pour sources locales
+                    score_validation = 0.0
+                    
+                    # Entreprise mentionnée (seuil plus bas)
+                    mots_entreprise = [mot for mot in nom_lower.split() if len(mot) > 2]
+                    mots_trouves = [mot for mot in mots_entreprise if mot in texte_complet]
+                    if mots_trouves:
+                        score_validation += 0.4  # Bonus entreprise
+                    
+                    # Commune mentionnée
+                    if commune_lower in texte_complet:
+                        score_validation += 0.3  # Bonus commune
+                    
+                    # Contexte Seine-et-Marne
+                    if any(terme in texte_complet for terme in ['77', 'seine-et-marne', 'marne-la-vallée']):
+                        score_validation += 0.2  # Bonus territorial
+                    
+                    # Thématique (optionnel pour sources locales)
+                    mots_thematiques = self.thematiques_mots_cles.get(thematique, [])
+                    if any(mot.lower() in texte_complet for mot in mots_thematiques):
+                        score_validation += 0.1  # Bonus thématique
+                    
+                    # ✅ SEUIL PERMISSIF pour sources locales
+                    if score_validation >= 0.4:  # Plus bas que le seuil général (0.7)
+                        resultat_enrichi = resultat.copy()
+                        resultat_enrichi.update({
+                            'source_locale': True,
+                            'score_validation_locale': score_validation,
+                            'mots_entreprise_trouves': mots_trouves,
+                            'bonus_source_locale': 0.3
+                        })
+                        
+                        resultats_valides.append(resultat_enrichi)
+                        print(f"            ✅ VALIDÉ source locale (score: {score_validation:.2f})")
+                    else:
+                        print(f"            ❌ Score local insuffisant: {score_validation:.2f}")
+                else:
+                    print(f"            ⚪ Pas une source locale: {url[:50]}...")
+                    
+            except Exception as e:
+                print(f"            ⚠️ Erreur validation locale {i}: {e}")
+                continue
+        
+        print(f"          📊 Validation locale terminée: {len(resultats_valides)}/{len(resultats)} validés")
+        return resultats_valides
+        
     def _recherche_par_commune_et_secteur(self, commune: str, secteur_naf: str, code_naf: str) -> Optional[Dict]:
         """Recherche basée sur la commune et le secteur d'activité"""
         try:
@@ -1072,7 +1377,6 @@ class RechercheWeb:
         
         return resultats_valides
 
-
     def _valider_resultats_entreprise_specifique(self, resultats: List[Dict], nom_entreprise: str) -> List[Dict]:
         """
         ✅ VALIDATION SPÉCIFIQUE pour s'assurer que les résultats parlent vraiment de l'entreprise
@@ -1112,7 +1416,6 @@ class RechercheWeb:
             
         print(f"        🎯 Ciblage entreprise: {len(resultats_cibles)}/{len(resultats)} résultats ciblés")
         return resultats_cibles
-
 
     def _detecter_entreprises_recherchables(self, entreprises: List[Dict]) -> List[Dict]:
         """
@@ -1450,183 +1753,7 @@ class RechercheWeb:
         except Exception as e:
             print(f"        ⚠️  Erreur recherche générale: {str(e)}")
             return self._simulation_avancee(requete)
-    
-    def _rechercher_avec_bibliotheque(self, requete: str) -> Optional[List[Dict]]:
-        """Recherche avec la bibliothèque ddgs (API corrigée)"""
-        try:
-            # Tentative d'import de la nouvelle bibliothèque ddgs
-            try:
-                from ddgs import DDGS
-                print(f"          📚 Utilisation bibliothèque ddgs (nouvelle version)")
-            except ImportError:
-                # Fallback vers l'ancienne version
-                try:
-                    from duckduckgo_search import DDGS
-                    print(f"          📚 Utilisation bibliothèque duckduckgo-search (ancienne)")
-                except ImportError:
-                    print(f"          ⚠️  Aucune bibliothèque DuckDuckGo installée")
-                    return None
-            
-            # Configuration de la recherche avec délais réalistes
-            print(f"          ⏰ Attente avant recherche (3s)...")
-            time.sleep(3)
-            
-            start_time = time.time()
-            
-            # Recherche avec la nouvelle API ddgs
-            try:
-                ddgs = DDGS()
-                resultats_bruts = ddgs.text(
-                    query=requete,  # ✅ CORRECTION: query au lieu de keywords
-                    region='fr-fr',
-                    safesearch='moderate',
-                    max_results=5
-                )
-                
-                # Conversion en liste si c'est un générateur
-                if hasattr(resultats_bruts, '__iter__'):
-                    resultats_bruts = list(resultats_bruts)
-                
-            except TypeError as e:
-                if "missing 1 required positional argument" in str(e):
-                    print(f"          🔄 Tentative avec API alternative...")
-                    # Tentative avec paramètres positionnels
-                    ddgs = DDGS()
-                    resultats_bruts = list(ddgs.text(requete, region='fr-fr', max_results=5))
-                else:
-                    raise e
-            
-            duree = time.time() - start_time
-            print(f"          ⏱️  Durée recherche: {duree:.2f}s")
-            
-            # Vérification durée réaliste
-            if duree < 1:
-                print(f"          ⚠️  Recherche trop rapide, ajout délai...")
-                time.sleep(2)
-            
-            # Conversion au format attendu
-            resultats_convertis = []
-            for result in resultats_bruts:
-                if result:  # Vérification que le résultat existe
-                    resultats_convertis.append({
-                        'titre': result.get('title', '') or result.get('name', ''),
-                        'description': result.get('body', '') or result.get('snippet', '') or result.get('description', ''),
-                        'url': result.get('href', '') or result.get('link', '') or result.get('url', ''),
-                        'extrait_complet': f"{result.get('title', 'Sans titre')} - {result.get('body', 'Sans description')}"
-                    })
-            
-            if resultats_convertis:
-                print(f"          ✅ Bibliothèque: {len(resultats_convertis)} résultats trouvés")
-                
-                # Délai après recherche réussie
-                print(f"          ⏰ Pause post-recherche (2s)...")
-                time.sleep(2)
-                
-                return resultats_convertis
-            else:
-                print(f"          ⚪ Aucun résultat trouvé")
-            
-        except Exception as e:
-            print(f"          ⚠️  Erreur bibliothèque: {str(e)}")
-            print(f"          🔄 Passage à la méthode alternative...")
-            
-        return None
-    
-    def _recherche_forcee_duckduckgo(self, requete: str) -> Optional[List[Dict]]:
-        """Recherche FORCÉE avec ddgs (API corrigée)"""
-        try:
-            # Tentative avec la nouvelle bibliothèque ddgs
-            try:
-                from ddgs import DDGS
-                print(f"          📚 Utilisation FORCÉE ddgs (nouvelle version)")
-                
-                # Attente forcée avant recherche
-                print(f"          ⏰ Attente pré-recherche (5s)...")
-                time.sleep(5)
-                
-                start_time = time.time()
-                
-                # Test de différentes syntaxes API
-                ddgs = DDGS()
-                resultats_bruts = None
-                
-                # Méthode 1: Avec paramètres nommés
-                try:
-                    print(f"          🔧 Tentative API méthode 1...")
-                    resultats_bruts = ddgs.text(
-                        query=requete,
-                        region='fr-fr',
-                        safesearch='moderate',
-                        max_results=5
-                    )
-                except Exception as e1:
-                    print(f"          ⚠️  Méthode 1 échouée: {e1}")
-                    
-                    # Méthode 2: Avec paramètre positionnel
-                    try:
-                        print(f"          🔧 Tentative API méthode 2...")
-                        resultats_bruts = ddgs.text(requete, max_results=5)
-                    except Exception as e2:
-                        print(f"          ⚠️  Méthode 2 échouée: {e2}")
-                        
-                        # Méthode 3: Syntaxe minimale
-                        try:
-                            print(f"          🔧 Tentative API méthode 3...")
-                            resultats_bruts = ddgs.text(requete)
-                        except Exception as e3:
-                            print(f"          ❌ Toutes les méthodes API ont échoué")
-                            print(f"               E1: {e1}")
-                            print(f"               E2: {e2}")
-                            print(f"               E3: {e3}")
-                            return self._recherche_http_manuelle(requete)
-                
-                # Conversion en liste si nécessaire
-                if resultats_bruts:
-                    if hasattr(resultats_bruts, '__iter__'):
-                        resultats_bruts = list(resultats_bruts)
-                    
-                    duree = time.time() - start_time
-                    print(f"          ⏱️  Durée recherche: {duree:.2f}s")
-                    
-                    # Vérification que ce ne soit pas trop rapide
-                    if duree < 2:
-                        print(f"          ⚠️  Recherche trop rapide, ajout délai forcé...")
-                        time.sleep(4)
-                    
-                    # Conversion au format attendu
-                    resultats_convertis = []
-                    for result in resultats_bruts[:5]:  # Limite à 5 résultats
-                        if result:
-                            resultats_convertis.append({
-                                'titre': result.get('title', '') or result.get('name', '') or 'Titre non disponible',
-                                'description': result.get('body', '') or result.get('snippet', '') or result.get('description', '') or 'Description non disponible',
-                                'url': result.get('href', '') or result.get('link', '') or result.get('url', '') or '',
-                                'extrait_complet': f"{result.get('title', 'Sans titre')} - {result.get('body', 'Sans description')}"
-                            })
-                    
-                    if resultats_convertis:
-                        print(f"          ✅ Recherche FORCÉE réussie: {len(resultats_convertis)} résultats")
-                        
-                        # Délai post-recherche
-                        print(f"          ⏰ Pause post-recherche (3s)...")
-                        time.sleep(3)
-                        
-                        return resultats_convertis
-                    else:
-                        print(f"          ⚪ Résultats vides après conversion")
-                
-            except ImportError:
-                print(f"          ❌ Bibliothèque ddgs non disponible")
-            except Exception as e:
-                print(f"          ❌ Erreur générale ddgs: {str(e)}")
-                
-            # Fallback vers recherche manuelle
-            return self._recherche_http_manuelle(requete)
-                
-        except Exception as e:
-            print(f"          ❌ Erreur recherche forcée: {str(e)}")
-            return self._recherche_http_manuelle(requete)
-    
+
     def _rechercher_bing(self, requete: str) -> Optional[List[Dict]]:
         """Recherche avec Bing (optimisé pour veille économique française)"""
         try:
@@ -1957,264 +2084,6 @@ class RechercheWeb:
         print(f"          🔄 Tous moteurs échoués - simulation")
         return self._simulation_avancee(requete)
 
-    def _rechercher_searx(self, requete: str) -> Optional[List[Dict]]:
-        """Recherche via SearX (métamoteur open source)"""
-        try:
-            # Instances SearX publiques françaises
-            instances_searx = [
-                'https://searx.be',
-                'https://searx.fmac.xyz',
-                'https://search.privacytools.io',
-                'https://searx.bar'
-            ]
-            
-            instance = random.choice(instances_searx)
-            
-            params = {
-                'q': requete,
-                'format': 'json',
-                'language': 'fr',
-                'categories': 'general'
-            }
-            
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
-            
-            response = self.session.get(f"{instance}/search", params=params, headers=headers, timeout=15)
-            
-            if response.status_code == 200:
-                data = response.json()
-                results = data.get('results', [])
-                
-                resultats_searx = []
-                for result in results[:5]:
-                    resultats_searx.append({
-                        'titre': result.get('title', ''),
-                        'description': result.get('content', ''),
-                        'url': result.get('url', ''),
-                        'extrait_complet': f"{result.get('title', '')} - {result.get('content', '')}"
-                    })
-                
-                if resultats_searx:
-                    print(f"          ✅ SearX: {len(resultats_searx)} résultats")
-                    return resultats_searx
-                    
-        except Exception as e:
-            print(f"          ⚠️ SearX échoué: {str(e)[:50]}")
-        
-        return None
-
-    def _rechercher_qwant(self, requete: str) -> Optional[List[Dict]]:
-        """Recherche via Qwant (moteur français respectueux)"""
-        try:
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': 'application/json'
-            }
-            
-            params = {
-                'q': requete,
-                'locale': 'fr_FR',
-                'count': 8,
-                'offset': 0
-            }
-            
-            # API Qwant
-            url = "https://api.qwant.com/api/search/web"
-            
-            response = self.session.get(url, params=params, headers=headers, timeout=15)
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                if data.get('status') == 'success':
-                    items = data.get('data', {}).get('result', {}).get('items', [])
-                    
-                    resultats_qwant = []
-                    for item in items[:5]:
-                        resultats_qwant.append({
-                            'titre': item.get('title', ''),
-                            'description': item.get('desc', ''),
-                            'url': item.get('url', ''),
-                            'extrait_complet': f"{item.get('title', '')} - {item.get('desc', '')}"
-                        })
-                    
-                    if resultats_qwant:
-                        print(f"          ✅ Qwant: {len(resultats_qwant)} résultats")
-                        return resultats_qwant
-                        
-        except Exception as e:
-            print(f"          ⚠️ Qwant échoué: {str(e)[:50]}")
-        
-        return None
-
-    def _rechercher_ecosia(self, requete: str) -> Optional[List[Dict]]:
-        """Recherche via Ecosia (écologique et moins restrictif)"""
-        try:
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept-Language': 'fr-FR,fr;q=0.9'
-            }
-            
-            params = {
-                'q': requete,
-                'region': 'fr-FR'
-            }
-            
-            url = "https://www.ecosia.org/search"
-            
-            response = self.session.get(url, params=params, headers=headers, timeout=15)
-            
-            if response.status_code == 200:
-                soup = BeautifulSoup(response.text, 'html.parser')
-                
-                resultats_ecosia = []
-                
-                # Sélecteurs Ecosia
-                for result in soup.select('.result')[:5]:
-                    titre_elem = result.select_one('.result-title a')
-                    desc_elem = result.select_one('.result-snippet')
-                    
-                    if titre_elem and desc_elem:
-                        resultats_ecosia.append({
-                            'titre': titre_elem.get_text().strip(),
-                            'description': desc_elem.get_text().strip(),
-                            'url': titre_elem.get('href', ''),
-                            'extrait_complet': f"{titre_elem.get_text()} - {desc_elem.get_text()}"
-                        })
-                
-                if resultats_ecosia:
-                    print(f"          ✅ Ecosia: {len(resultats_ecosia)} résultats")
-                    return resultats_ecosia
-                    
-        except Exception as e:
-            print(f"          ⚠️ Ecosia échoué: {str(e)[:50]}")
-        
-        return None
-
-    def _rechercher_startpage(self, requete: str) -> Optional[List[Dict]]:
-        """Recherche via Startpage (proxy Google privé)"""
-        try:
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
-            
-            params = {
-                'query': requete,
-                'language': 'francais',
-                'cat': 'web'
-            }
-            
-            url = "https://www.startpage.com/sp/search"
-            
-            response = self.session.get(url, params=params, headers=headers, timeout=15)
-            
-            if response.status_code == 200:
-                soup = BeautifulSoup(response.text, 'html.parser')
-                
-                resultats_startpage = []
-                
-                for result in soup.select('.w-gl__result')[:5]:
-                    titre_elem = result.select_one('h3 a')
-                    desc_elem = result.select_one('.w-gl__description')
-                    
-                    if titre_elem and desc_elem:
-                        resultats_startpage.append({
-                            'titre': titre_elem.get_text().strip(),
-                            'description': desc_elem.get_text().strip(),
-                            'url': titre_elem.get('href', ''),
-                            'extrait_complet': f"{titre_elem.get_text()} - {desc_elem.get_text()}"
-                        })
-                
-                if resultats_startpage:
-                    print(f"          ✅ Startpage: {len(resultats_startpage)} résultats")
-                    return resultats_startpage
-                    
-        except Exception as e:
-            print(f"          ⚠️ Startpage échoué: {str(e)[:50]}")
-        
-        return None
-
-    def _tester_api_ddgs(self):
-        """Test des différentes syntaxes de l'API ddgs"""
-        try:
-            from ddgs import DDGS
-            
-            print("🧪 Test des syntaxes API ddgs...")
-            
-            test_query = "test python"
-            ddgs = DDGS()
-            
-            # Test 1: Paramètres nommés
-            try:
-                print("   🔧 Test 1: paramètres nommés...")
-                results = ddgs.text(query=test_query, max_results=2)
-                results_list = list(results)
-                print(f"   ✅ Méthode 1 OK: {len(results_list)} résultats")
-                return "method1"
-            except Exception as e:
-                print(f"   ❌ Méthode 1: {e}")
-            
-            # Test 2: Paramètre positionnel
-            try:
-                print("   🔧 Test 2: paramètre positionnel...")
-                results = ddgs.text(test_query, max_results=2)
-                results_list = list(results)
-                print(f"   ✅ Méthode 2 OK: {len(results_list)} résultats")
-                return "method2"
-            except Exception as e:
-                print(f"   ❌ Méthode 2: {e}")
-            
-            # Test 3: Syntaxe minimale
-            try:
-                print("   🔧 Test 3: syntaxe minimale...")
-                results = ddgs.text(test_query)
-                results_list = list(results)
-                print(f"   ✅ Méthode 3 OK: {len(results_list)} résultats")
-                return "method3"
-            except Exception as e:
-                print(f"   ❌ Méthode 3: {e}")
-            
-            print("   ❌ Toutes les méthodes ont échoué")
-            return None
-            
-        except ImportError:
-            print("   ❌ Bibliothèque ddgs non installée")
-            return None
-
-    def _recherche_http_manuelle(self, requete: str) -> Optional[List[Dict]]:
-        """Méthode de recherche HTTP manuelle en fallback"""
-        try:
-            print(f"          🔧 Fallback: recherche HTTP manuelle")
-            
-            # Simulation avec délais réalistes pour paraître authentique
-            print(f"          ⏰ Simulation recherche web (délai 8s)...")
-            time.sleep(8)
-            
-            # Génération de résultats réalistes basés sur la requête
-            import random
-            
-            # Extraction des éléments de la requête
-            mots_requete = requete.replace('"', '').split()
-            entreprise = mots_requete[0] if mots_requete else "Entreprise"
-            
-            resultats_manuels = []
-            for i in range(random.randint(2, 4)):
-                resultats_manuels.append({
-                    'titre': f"{entreprise} - Résultat web {i+1}",
-                    'description': f"Information trouvée sur {entreprise} via recherche manuelle. Contenu pertinent pour {' '.join(mots_requete[-2:])}.",
-                    'url': f"https://www.{entreprise.lower()}-info.fr/page{i+1}",
-                    'extrait_complet': f"{entreprise} - Information pertinente via recherche manuelle"
-                })
-            
-            print(f"          ✅ Recherche manuelle: {len(resultats_manuels)} résultats générés")
-            return resultats_manuels
-            
-        except Exception as e:
-            print(f"          ❌ Erreur recherche manuelle: {str(e)}")
-            return None
-    
     def _simulation_avancee(self, requete: str) -> Optional[List[Dict]]:
         """Simulation avancée avec contenu plus réaliste"""
         try:
@@ -2487,71 +2356,6 @@ class RechercheWeb:
             print(f"          ⚠️  Erreur Bing: {str(e)}")
             return None
 
-    def _simulation_intelligente(self, requete: str) -> Optional[List[Dict]]:
-        """Simulation intelligente basée sur l'analyse de la requête"""
-        try:
-            # Analyse de la requête
-            requete_lower = requete.lower()
-            
-            # Templates par thématique
-            templates = {
-                'recrutement': [
-                    "Offres d'emploi disponibles - Rejoignez notre équipe",
-                    "Nous recherchons des talents pour nos équipes",
-                    "Postes à pourvoir - CDI et CDD disponibles",
-                ],
-                'événement': [
-                    "Journée portes ouvertes - Découvrez nos activités",
-                    "Conférence professionnelle - Inscription gratuite",
-                    "Salon professionnel - Retrouvez-nous",
-                ],
-                'innovation': [
-                    "Nouveau produit lancé - Innovation technologique",
-                    "Développement R&D - Avancées technologiques",
-                    "Modernisation des équipements",
-                ],
-                'développement': [
-                    "Expansion de l'entreprise - Nouveaux marchés",
-                    "Partenariat stratégique signé",
-                    "Développement commercial - Nouvelles opportunités",
-                ]
-            }
-            
-            # Détection de la thématique
-            thematique_detectee = 'développement'
-            
-            if any(mot in requete_lower for mot in ['recrutement', 'emploi', 'cdi', 'embauche']):
-                thematique_detectee = 'recrutement'
-            elif any(mot in requete_lower for mot in ['événement', 'salon', 'conférence', 'porte']):
-                thematique_detectee = 'événement'
-            elif any(mot in requete_lower for mot in ['innovation', 'produit', 'r&d', 'technologie']):
-                thematique_detectee = 'innovation'
-            
-            # Extraction du nom d'entreprise
-            match = re.search(r'"([^"]+)"', requete)
-            nom_entreprise = match.group(1) if match else "Entreprise"
-            
-            # Génération de résultats
-            resultats = []
-            templates_thematique = templates.get(thematique_detectee, templates['développement'])
-            
-            for i, template in enumerate(templates_thematique[:3]):
-                resultats.append({
-                    'titre': f"{nom_entreprise} - {template.split(' - ')[0]}",
-                    'description': template,
-                    'url': f"https://example-{i+1}.com/{nom_entreprise.lower().replace(' ', '-')}",
-                    'extrait_complet': f"{nom_entreprise} - {template}"
-                })
-            
-            if resultats:
-                print(f"          📋 Simulation: {len(resultats)} résultats générés")
-                return resultats
-                
-        except Exception as e:
-            print(f"          ⚠️  Erreur simulation: {str(e)}")
-            
-        return None
-            
     def _recherche_presse_locale(self, entreprise: Dict) -> Optional[Dict]:
         """Recherche dans la presse locale"""
         try:
@@ -2678,37 +2482,6 @@ class RechercheWeb:
         return list(set(mots_cles))
 
     # ✅ MÉTHODE DE DEBUG pour vérifier le ciblage
-    def debug_ciblage_entreprise(self, nom_entreprise: str, resultats: List[Dict]):
-        """Méthode de debug pour vérifier que les résultats parlent bien de l'entreprise"""
-        print(f"\n🐛 DEBUG CIBLAGE pour: {nom_entreprise}")
-        print("=" * 50)
-        
-        for i, resultat in enumerate(resultats):
-            titre = resultat.get('titre', '')
-            description = resultat.get('description', '')
-            
-            print(f"\n📄 Résultat {i+1}:")
-            print(f"   🏷️  Titre: {titre}")
-            print(f"   📝 Description: {description[:100]}...")
-            
-            # Vérification si l'entreprise est mentionnée
-            texte_complet = f"{titre} {description}".lower()
-            nom_lower = nom_entreprise.lower()
-            
-            mots_entreprise = [mot for mot in nom_lower.split() if len(mot) > 2]
-            mots_trouvés = [mot for mot in mots_entreprise if mot in texte_complet]
-            
-            print(f"   🎯 Mots entreprise trouvés: {mots_trouvés}")
-            print(f"   📊 Pertinence entreprise: {len(mots_trouvés)}/{len(mots_entreprise)}")
-            
-            if len(mots_trouvés) == 0:
-                print(f"   ⚠️  ATTENTION: Ce résultat ne semble pas parler de {nom_entreprise}")
-            elif len(mots_trouvés) / len(mots_entreprise) >= 0.5:
-                print(f"   ✅ Résultat bien ciblé sur l'entreprise")
-            else:
-                print(f"   🔸 Résultat partiellement ciblé")
-        
-        print("=" * 50)
 
     def _get_cache_key(self, url: str) -> str:
         """Génération d'une clé de cache"""
@@ -2866,8 +2639,6 @@ class RechercheWeb:
                 return secteur_court
         
         return ""
-    
-
 
 class GoogleProtection:
     """Système de protection anti-détection Google"""
