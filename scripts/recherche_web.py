@@ -1287,6 +1287,12 @@ class RechercheWeb:
                 
                 texte_complet = f"{titre} {description} {url}"
                 
+                if commune_lower and (commune_lower not in texte_complet):
+                    # On log et on ignore le résultat
+                    # (site officiel est traité ailleurs, donc pas concerné par cette règle)
+                    # print(f"        ❌ Commune absente du résultat")
+                    continue
+                    
                 # ✅ VALIDATION STRICTE NIVEAU 1: L'entreprise doit être mentionnée
                 mots_entreprise_trouves = [mot for mot in mots_entreprise_utiles if mot in texte_complet]
                 score_entreprise = len(mots_entreprise_trouves) / len(mots_entreprise_utiles)

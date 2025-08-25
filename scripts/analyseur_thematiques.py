@@ -61,7 +61,19 @@ class AnalyseurThematiques:
         }
         
         self.content_validator = AIContentValidator()
-            
+        
+        EXTRACT_FILTER_PATTERNS = [
+            r'\bcgu\b', r'\bdonn[ée]es personnelles\b', r'\bmentions l[ée]gales\b',
+            r'\bplan du site\b', r'\bfaq\b', r'\bconditions g[ée]n[ée]rales\b',
+            r'\bnewsletter\b', r'\bcookies?\b'
+        ]
+    
+    def _est_extrait_peu_pertinent(self, texte: str) -> bool:
+        """True si l'extrait ressemble à une page générique (CGU, FAQ...)"""
+        txt = (texte or "").lower()
+        import re
+        return any(re.search(pat, txt) for pat in self.EXTRACT_FILTER_PATTERNS)
+    
     def _charger_config_mots_cles(self) -> Dict:
         """Chargement de la configuration des mots-clés"""
         try:
@@ -305,41 +317,51 @@ class AnalyseurThematiques:
         return score_final
 
     def _analyser_extraits_vos_donnees(self, extraits: List[Dict], thematique: str) -> float:
-        """✅ CORRIGÉ : Analyse des extraits dans votre format exact"""
+        """Analyse des extraits : filtrage bruit, déduplication, scoring modéré."""
         if not extraits:
             return 0.0
-        
-        score_extraits = 0.0
-        mots_cles_thematique = self.thematiques_mots_cles.get(thematique, [])
-        
-        print(f"             📋 Analyse de {len(extraits)} extraits pour {thematique}")
-        
-        for i, extrait in enumerate(extraits[:3]):  # Top 3 extraits
-            if not isinstance(extrait, dict):
+
+        # 1) Normalisation + déduplication par (titre,url,description)
+        vus = set()
+        extraits_uniques = []
+        for ex in extraits:
+            if not isinstance(ex, dict):
                 continue
-            
-            # Construction du texte à analyser
-            texte_parts = []
-            for champ in ['titre', 'description', 'extrait_complet']:
-                if champ in extrait and isinstance(extrait[champ], str):
-                    texte_parts.append(extrait[champ])
-            
-            texte_complet = ' '.join(texte_parts).lower()
-            
-            if len(texte_complet) > 10:  # Texte significatif
-                # Comptage des mots-clés thématiques
-                mots_trouves = [mot for mot in mots_cles_thematique if mot.lower() in texte_complet]
-                
-                if mots_trouves:
-                    score_extrait = min(len(mots_trouves) * 0.1, 0.3)
-                    score_extraits += score_extrait
-                    print(f"               {i+1}. {len(mots_trouves)} mots-clés → +{score_extrait}")
-                else:
-                    # Bonus minimal pour contenu pertinent
-                    if any(terme in texte_complet for terme in ['entreprise', 'société', 'activité', 'service']):
-                        score_extraits += 0.05
-                        print(f"               {i+1}. Contenu général → +0.05")
-        
+            titre = (ex.get('titre') or '').strip()
+            url = (ex.get('url') or '').strip()
+            desc = (ex.get('description') or '').strip()
+
+            # Filtre "peu pertinent"
+            texte_check = f"{titre} {desc} {url}".strip()
+            if self._est_extrait_peu_pertinent(texte_check):
+                continue
+
+            key = (titre.lower(), url.lower(), desc.lower()[:120])
+            if key in vus:
+                continue
+            vus.add(key)
+            extraits_uniques.append(ex)
+
+        # 2) Limiter aux 3 meilleurs (heuristique simple : longueur desc + présence mots-clés)
+        mots_cles_thematique = self.thematiques_mots_cles.get(thematique, [])
+        def score_extrait(e):
+            t = f"{e.get('titre','')} {e.get('description','')}".lower()
+            hits = sum(1 for m in mots_cles_thematique if m.lower() in t)
+            return hits * 10 + len(e.get('description',''))
+
+        extraits_uniques.sort(key=score_extrait, reverse=True)
+        extraits_sel = extraits_uniques[:3]
+
+        # 3) Scoring global (max 0.5)
+        score_extraits = 0.0
+        for i, extrait in enumerate(extraits_sel):
+            texte = f"{extrait.get('titre','')} {extrait.get('description','')}".lower()
+            mots_trouves = [m for m in mots_cles_thematique if m.lower() in texte]
+            if mots_trouves:
+                score_extraits += min(len(mots_trouves) * 0.1, 0.3)
+            elif any(w in texte for w in ['entreprise','société','activité','service','emploi','recrut']):
+                score_extraits += 0.05
+
         return min(score_extraits, 0.5)
 
     def _extraire_infos_format_reel(self, donnees: Dict) -> Dict:
@@ -356,32 +378,46 @@ class AnalyseurThematiques:
                 informations[champ] = donnees[champ]
         
         # Traitement des extraits textuels
+                # Traitement des extraits textuels (filtrage + dédup + top 3)
         if 'extraits_textuels' in donnees:
             extraits = donnees['extraits_textuels']
             if isinstance(extraits, list) and len(extraits) > 0:
-                informations['extraits_textuels'] = extraits[:3]  # Top 3
-                
-                # Résumés
-                titres = []
-                descriptions = []
-                urls_extraits = []
-                
-                for extrait in extraits[:3]:
-                    if isinstance(extrait, dict):
-                        if 'titre' in extrait and extrait['titre']:
-                            titres.append(extrait['titre'])
-                        if 'description' in extrait and extrait['description']:
-                            descriptions.append(extrait['description'])
-                        if 'url' in extrait and extrait['url']:
-                            urls_extraits.append(extrait['url'])
-                
+                vus = set()
+                filtrés = []
+                for ex in extraits:
+                    if not isinstance(ex, dict):
+                        continue
+                    titre = (ex.get('titre') or '').strip()
+                    url = (ex.get('url') or '').strip()
+                    desc = (ex.get('description') or '').strip()
+                    if self._est_extrait_peu_pertinent(f"{titre} {desc} {url}"):
+                        continue
+                    key = (titre.lower(), url.lower(), desc.lower()[:120])
+                    if key in vus:
+                        continue
+                    vus.add(key)
+                    filtrés.append(ex)
+
+                # Top 3 lisibles
+                informations['extraits_textuels'] = filtrés[:3]
+
+                # Résumés utiles
+                titres, descriptions, urls_extraits = [], [], []
+                for extrait in informations['extraits_textuels']:
+                    if 'titre' in extrait and extrait['titre']:
+                        titres.append(extrait['titre'])
+                    if 'description' in extrait and extrait['description']:
+                        descriptions.append(extrait['description'])
+                    if 'url' in extrait and extrait['url']:
+                        urls_extraits.append(extrait['url'])
+
                 if titres:
                     informations['resume_titres'] = ' | '.join(titres)
                 if descriptions:
                     informations['resume_descriptions'] = ' | '.join(descriptions[:2])
                 if urls_extraits:
-                    informations['urls_sources'] = urls_extraits
-        
+                    informations['urls_sources'] = list(dict.fromkeys(urls_extraits))
+
         # Métadonnées
         informations['nb_champs_remplis'] = len([v for v in informations.values() if v])
         informations['source_data_format'] = 'format_reel_detecte'

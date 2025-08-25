@@ -9,6 +9,8 @@ import requests
 from urllib.parse import urlparse
 from typing import List, Dict, Set
 import time
+import re
+from collections import defaultdict
 
 class ReportFixer:
     """Correcteur de rapports - Anti-doublons et validation URLs"""
@@ -287,6 +289,117 @@ class GenerateurRapports:
 '''
     
     return integration_code
+
+def _strip_html(s): return (s or '').strip()
+
+def _fix_extraits_dupliques(html: str) -> str:
+    """Supprime blocs d'extraits strictement identiques répétés à la suite."""
+    # Heuristique : si trois <div ...> consécutifs ont même titre+desc+url -> n’en garder qu’un
+    pattern = re.compile(
+        r'(<div[^>]*>\s*<div[^>]*>\s*🌐[^<]*</div>\s*<div[^>]*>[^<]*</div>\s*(?:<div[^>]*>.*?</div>\s*)?</div>)(\s*\1)+',
+        re.DOTALL | re.IGNORECASE
+    )
+    return re.sub(pattern, r'\1', html)
+
+def _fix_noms_dupliques_commune(html: str) -> str:
+    """Dans la carte 'Résumé par Commune', supprime les répétitions immédiates 'ARGEDIS, ARGEDIS'."""
+    # Simpliste mais efficace : remplacer ', NOM, NOM' par ', NOM'
+    def dedup_list(match):
+        bloc = match.group(1)
+        noms = [n.strip() for n in bloc.split(',') if n.strip()]
+        uniques = []
+        for n in noms:
+            if n not in uniques:
+                uniques.append(n)
+        return ', '.join(uniques)
+
+    return re.sub(
+        r'(<div style="font-size: 0\.9em; color: #2c3e50; line-height: 1\.4;">\s*)([^<]+)(\s*</div>)',
+        lambda m: m.group(1) + dedup_list(m.group(2)) + m.group(3),
+        html, flags=re.DOTALL
+    )
+
+def post_process_html(html: str) -> str:
+    html = _fix_extraits_dupliques(html)
+    html = _fix_noms_dupliques_commune(html)
+    return html
+
+def post_process_html(html: str) -> str:
+    """
+    Petit lissage HTML de fin de chaîne :
+    - Supprime les doublons immédiats du type "ARGEDIS, ARGEDIS"
+    - Déduplique des suites "X, X, X"
+    - Normalise espaces et virgules
+    - Évite les répétitions consécutives de balises simples
+
+    Le traitement reste volontairement conservateur (scope limité aux listes/phrases).
+    """
+    if not html:
+        return html
+
+    # 1) Nettoyage basique des espaces/virgules
+    html = re.sub(r'\s+,', ', ', html)          # espace avant virgule -> après
+    html = re.sub(r',\s+', ', ', html)          # normalise ",    " -> ", "
+    html = re.sub(r'\s{2,}', ' ', html)         # espaces multiples -> simple espace
+
+    # 2) Déduplication de mots/expressions consécutifs séparés par virgule
+    #    Exemple: "ARGEDIS, ARGEDIS" -> "ARGEDIS"
+    #    On reste prudent: on limite la longueur de l'expression et on évite de traverser tags/balises HTML.
+    def dedupe_csv(match: re.Match) -> str:
+        # prend la séquence capturée et supprime doublons consécutifs
+        items = [x.strip() for x in match.group(0).split(',')]
+        deduped = []
+        prev = None
+        for it in items:
+            if it != prev:
+                deduped.append(it)
+            prev = it
+        return ', '.join(deduped)
+
+    # cible les segments CSV "Mot[, Mot]..." sans chevrons (évite HTML tags)
+    # On traite par blocs entre balises pour rester conservateur.
+    def dedupe_in_text_segments(html_text: str) -> str:
+        # Sur chaque bloc de texte (hors balises), on retire "X, X" immédiats
+        # Passes multiples pour capturer des triples "X, X, X"
+        for _ in range(2):
+            html_text = re.sub(
+                r'(?<![<>])\b([A-Z0-9][A-Z0-9\'&\-. ]{1,80}?)\b,\s+\1\b(?![^<]*>)',
+                r'\1',
+                html_text
+            )
+        return html_text
+
+    html = dedupe_in_text_segments(html)
+
+    # 3) Déduplication douce dans les listes "bullet-like" séparées par " | "
+    #    Exemple: "A | A | B" -> "A | B"
+    def dedupe_pipe_segments(text: str) -> str:
+        parts = text.split(' | ')
+        result = []
+        seen_prev = None
+        for p in parts:
+            if p != seen_prev:
+                result.append(p)
+            seen_prev = p
+        return ' | '.join(result)
+
+    html = re.sub(
+        r'((?:[^<>]|<(?!/?(?:script|style)[^>]*>))+)',
+        lambda m: dedupe_pipe_segments(m.group(1)),
+        html,
+        flags=re.IGNORECASE
+    )
+
+    # 4) Évite la répétition immédiate de mêmes balises simples (ex: <div>..</div><div>..</div> identiques collées)
+    #    Ici on ne supprime pas, on insère une fine espace pour éviter "collage visuel" ; c’est safe.
+    html = re.sub(r'(</(div|p)>\s*)(<(div|p)[ >])', r'\1\n\3', html, flags=re.IGNORECASE)
+
+    # 5) Finitions ponctuation/espaces
+    html = re.sub(r'\s+\.', '.', html)
+    html = re.sub(r'\s+,', ', ', html)
+    html = re.sub(r',\s+,', ', ', html)
+
+    return html
 
 if __name__ == "__main__":
     print("🧪 Test du correcteur de rapports")
