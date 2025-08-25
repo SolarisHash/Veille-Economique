@@ -11,6 +11,9 @@ import json
 import yaml
 from collections import defaultdict, Counter
 
+from ai_content_validator import AIContentValidator
+
+
 class AnalyseurThematiques:
     """Analyseur thématique pour classifier les informations trouvées"""
     
@@ -56,6 +59,8 @@ class AnalyseurThematiques:
                 'soutien', 'dons', 'charitable', 'solidarité', 'engagement social'
             ]
         }
+        
+        self.content_validator = AIContentValidator()
             
     def _charger_config_mots_cles(self) -> Dict:
         """Chargement de la configuration des mots-clés"""
@@ -832,6 +837,16 @@ class AnalyseurThematiques:
             try:
                 # Vérification des données
                 donnees_thematiques = resultat.get('donnees_thematiques', {})
+                
+                if donnees_thematiques and hasattr(self, 'content_validator'):
+                    try:
+                        print(f"    🤖 Validation IA anti-faux positifs...")
+                        validated_data = self.content_validator.batch_validate_contents(
+                            donnees_thematiques, resultat.get('entreprise', {})
+                        )
+                        donnees_thematiques = validated_data  # Remplacer par données validées
+                    except Exception as e:
+                        print(f"    ⚠️ Validation IA échouée: {e}")
                 
                 if not donnees_thematiques:
                     print(f"    ⚠️ Aucune donnée thématique")
