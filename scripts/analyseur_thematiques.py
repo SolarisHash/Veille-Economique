@@ -21,7 +21,7 @@ class AnalyseurThematiques:
         """Initialisation de l'analyseur avec TOUS les mots-clés"""
         self.thematiques = thematiques_config
         self.config = self._charger_config_mots_cles()
-        self.seuil_pertinence = 0.5  # ✅ SEUIL ABAISSÉ
+        self.seuil_pertinence = 0.35  # ✅ SEUIL ABAISSÉ
         self.periode_recente = timedelta(days=30)
         
         # ✅ AJOUT CRITIQUE : Définition des mots-clés thématiques
@@ -62,12 +62,16 @@ class AnalyseurThematiques:
         
         self.content_validator = AIContentValidator()
         
-        EXTRACT_FILTER_PATTERNS = [
-            r'\bcgu\b', r'\bdonn[ée]es personnelles\b', r'\bmentions l[ée]gales\b',
-            r'\bplan du site\b', r'\bfaq\b', r'\bconditions g[ée]n[ée]rales\b',
-            r'\bnewsletter\b', r'\bcookies?\b'
+        self.EXTRACT_FILTER_PATTERNS = [
+            r"(?i)\bmentions?\s+l[eé]gales?\b",
+            r"(?i)\bcookies?\b",
+            r"(?i)\b(confidentialit[eé]|privacy|rgpd)\b",
+            r"(?i)\b(conditions?|c\.?g\.?u\.?|terms)\b",
+            r"(?i)\b(se\s*connecter|connexion|s'?inscrire|login|inscription)\b",
+            r"(?i)\b(newsletter|abonn[eé]ment|subscribe)\b",
+            r"(?i)\b(wikip[eé]dia|wordreference|larousse|dictionnaire|traduction)\b"
         ]
-    
+        
     def _est_extrait_peu_pertinent(self, texte: str) -> bool:
         """True si l'extrait ressemble à une page générique (CGU, FAQ...)"""
         txt = (texte or "").lower()
@@ -178,6 +182,12 @@ class AnalyseurThematiques:
                     score = 0.0  # Score par défaut en cas d'erreur
                     continue
         
+        # 🔒 Commune obligatoire (sauf site officiel)
+        self._appliquer_validation_commune_stricte(entreprise, resultats_thematiques)
+
+        # 🔁 Recatégorisation événements → recrutements si nécessaire
+        self._reclasser_offres_emploi(resultats_thematiques)
+                
         # Calcul des scores finaux
         for thematique in resultats_thematiques:
             self._calculer_score_final(resultats_thematiques[thematique])
@@ -317,52 +327,55 @@ class AnalyseurThematiques:
         return score_final
 
     def _analyser_extraits_vos_donnees(self, extraits: List[Dict], thematique: str) -> float:
-        """Analyse des extraits : filtrage bruit, déduplication, scoring modéré."""
+        """Analyse des extraits avec filtrage anti-bruit et scoring thématique."""
         if not extraits:
             return 0.0
 
-        # 1) Normalisation + déduplication par (titre,url,description)
-        vus = set()
-        extraits_uniques = []
+        score_extraits = 0.0
+        mots_cles_thematique = self.thematiques_mots_cles.get(thematique, [])
+
+        # --- Filtrage anti-bruit basé sur EXTRACT_FILTER_PATTERNS ---
+        filtres = [re.compile(p) for p in getattr(self, "EXTRACT_FILTER_PATTERNS", [])]
+        extraits_filtrés = []
         for ex in extraits:
             if not isinstance(ex, dict):
                 continue
-            titre = (ex.get('titre') or '').strip()
-            url = (ex.get('url') or '').strip()
-            desc = (ex.get('description') or '').strip()
-
-            # Filtre "peu pertinent"
-            texte_check = f"{titre} {desc} {url}".strip()
-            if self._est_extrait_peu_pertinent(texte_check):
+            texte_parts = []
+            for champ in ["titre", "description", "extrait_complet"]:
+                if champ in ex and isinstance(ex[champ], str):
+                    texte_parts.append(ex[champ])
+            texte = " ".join(texte_parts)
+            if any(p.search(texte) for p in filtres):
+                # on ignore les extraits de cookies/mentions/etc.
                 continue
+            extraits_filtrés.append(ex)
 
-            key = (titre.lower(), url.lower(), desc.lower()[:120])
-            if key in vus:
-                continue
-            vus.add(key)
-            extraits_uniques.append(ex)
+        if not extraits_filtrés:
+            return 0.0
 
-        # 2) Limiter aux 3 meilleurs (heuristique simple : longueur desc + présence mots-clés)
-        mots_cles_thematique = self.thematiques_mots_cles.get(thematique, [])
-        def score_extrait(e):
-            t = f"{e.get('titre','')} {e.get('description','')}".lower()
-            hits = sum(1 for m in mots_cles_thematique if m.lower() in t)
-            return hits * 10 + len(e.get('description',''))
+        # --- Scoring sur les 3 meilleurs extraits restants ---
+        print(f"             📋 Analyse de {len(extraits_filtrés)} extraits pour {thematique}")
+        for i, extrait in enumerate(extraits_filtrés[:3]):
+            texte_parts = []
+            for champ in ["titre", "description", "extrait_complet"]:
+                if champ in extrait and isinstance(extrait[champ], str):
+                    texte_parts.append(extrait[champ])
+            texte_complet = " ".join(texte_parts).lower()
 
-        extraits_uniques.sort(key=score_extrait, reverse=True)
-        extraits_sel = extraits_uniques[:3]
-
-        # 3) Scoring global (max 0.5)
-        score_extraits = 0.0
-        for i, extrait in enumerate(extraits_sel):
-            texte = f"{extrait.get('titre','')} {extrait.get('description','')}".lower()
-            mots_trouves = [m for m in mots_cles_thematique if m.lower() in texte]
-            if mots_trouves:
-                score_extraits += min(len(mots_trouves) * 0.1, 0.3)
-            elif any(w in texte for w in ['entreprise','société','activité','service','emploi','recrut']):
-                score_extraits += 0.05
+            if len(texte_complet) > 10:
+                mots_trouves = [mot for mot in mots_cles_thematique if mot.lower() in texte_complet]
+                if mots_trouves:
+                    score_extrait = min(len(mots_trouves) * 0.1, 0.3)
+                    score_extraits += score_extrait
+                    print(f"               {i+1}. {len(mots_trouves)} mots-clés → +{score_extrait}")
+                else:
+                    if any(t in texte_complet for t in ['entreprise', 'société', 'activité', 'service']):
+                        score_extraits += 0.05
+                        print(f"               {i+1}. Contenu général → +0.05")
 
         return min(score_extraits, 0.5)
+
+
 
     def _extraire_infos_format_reel(self, donnees: Dict) -> Dict:
         """✅ CORRIGÉ : Extraction d'informations selon votre format de données"""
@@ -424,6 +437,88 @@ class AnalyseurThematiques:
         
         return informations
 
+    def _appliquer_validation_commune_stricte(self, entreprise: Dict, resultats_thematiques: Dict):
+        """
+        🔒 Commune obligatoire : si la commune est vide, on invalide toutes les thématiques
+        sauf celles dont une source 'site_officiel' est présente.
+        """
+        commune = (entreprise.get('commune') or '').strip()
+        if commune:
+            return  # OK
+        for thematique, res in resultats_thematiques.items():
+            if not res.get('trouve'):
+                continue
+            # Si AUCUNE source 'site_officiel' n'est présente -> on invalide
+            sources = res.get('sources', [])
+            if 'site_officiel' not in sources:
+                res['trouve'] = False
+                res['score_pertinence'] = 0.0
+                res['niveau_confiance'] = 'Faible'
+                # On vide les détails qui ne sont plus valides
+                res['details'] = [d for d in res.get('details', []) if d.get('source') == 'site_officiel']
+
+
+    def _reclasser_offres_emploi(self, resultats_thematiques: Dict):
+        """
+        🔁 Si des indices forts d'offres d'emploi sont présents dans 'evenements',
+        on bascule ces éléments vers 'recrutements'.
+        """
+        if 'evenements' not in resultats_thematiques or 'recrutements' not in resultats_thematiques:
+            return
+
+        mots_emploi = {
+            'recrutement', 'recrute', 'nous recrutons', 'offre', 'offres', 'offre emploi',
+            'cdi', 'cdd', 'stage', 'alternance', 'apprentissage', 'poste', 'carrière'
+        }
+
+        evt = resultats_thematiques['evenements']
+        if not evt.get('trouve'):
+            return
+
+        details_evt = evt.get('details', [])
+        a_reclasser = []
+        gardes_evt = []
+
+        def _contient_emploi(detail: Dict) -> bool:
+            txt = []
+            info = detail.get('informations', {})
+            # Rechercher dans titres/descriptions/extraits
+            for extr in info.get('extraits_textuels', []):
+                txt.append(extr.get('titre', '') or '')
+                txt.append(extr.get('description', '') or '')
+                txt.append(extr.get('extrait_complet', '') or '')
+            blob = ' '.join(t.lower() for t in txt if isinstance(t, str))
+            return any(m in blob for m in mots_emploi)
+
+        for d in details_evt:
+            if _contient_emploi(d):
+                a_reclasser.append(d)
+            else:
+                gardes_evt.append(d)
+
+        if not a_reclasser:
+            return
+
+        # Met à jour événements (on conserve ce qui n'est pas "emploi")
+        evt['details'] = gardes_evt
+        if not gardes_evt:
+            evt['trouve'] = False
+            evt['score_pertinence'] = 0.0
+            evt['niveau_confiance'] = 'Faible'
+            evt['sources'] = []
+
+        # Ajoute/merge côté recrutements
+        rec = resultats_thematiques['recrutements']
+        rec['trouve'] = True
+        rec['details'] = (rec.get('details') or []) + a_reclasser
+        # On ajuste un score minimum raisonnable si besoin
+        rec['score_pertinence'] = max(rec.get('score_pertinence', 0.0), 0.55)
+        if 'web_general' not in (rec.get('sources') or []):
+            rec['sources'] = (rec.get('sources') or []) + ['web_general']
+        # Confiance indicative
+        rec['niveau_confiance'] = 'Moyen' if rec['score_pertinence'] < 0.8 else 'Élevé'
+
+    
     def _extraire_informations_completes(self, info: Dict, source: str) -> Dict:
         """Extraction COMPLÈTE des informations avec tous les détails textuels"""
         informations = {
@@ -596,7 +691,7 @@ class AnalyseurThematiques:
         scores_valides = [
             res['score_pertinence']
             for res in resultats_thematiques.values()
-            if res['trouve'] and res['score_pertinence'] > 0.3
+            if res['trouve'] and res['score_pertinence'] > 0.25
         ]
 
         if not scores_valides:
@@ -861,72 +956,75 @@ class AnalyseurThematiques:
 
     # ✅ MÉTHODE PRINCIPALE CORRIGÉE pour résoudre le problème de structure
     def analyser_resultats(self, resultats_bruts: List[Dict], logger=None) -> List[Dict]:
-        """✅ VERSION FINALE CORRIGÉE : Analyse adaptée au format exact de vos données"""
-        print("🔬 Analyse thématique des résultats (VERSION CORRIGÉE FINALE)")
-        
+        """✅ VERSION ROBUSTE : fallback si la validation IA vide trop les données"""
+        print("🔬 Analyse thématique des résultats (VERSION ROBUSTE)")
+
         entreprises_enrichies = []
-        
+
         for i, resultat in enumerate(resultats_bruts, 1):
             nom_entreprise = resultat.get('entreprise', {}).get('nom', f'Entreprise_{i}')
             print(f"  📊 Analyse {i}/{len(resultats_bruts)}: {nom_entreprise}")
-            
+
             try:
-                # Vérification des données
                 donnees_thematiques = resultat.get('donnees_thematiques', {})
-                
+                donnees_thematiques_originales = donnees_thematiques
+
+                # 🔎 Validation IA anti-faux positifs avec fallback sécurisé
                 if donnees_thematiques and hasattr(self, 'content_validator'):
                     try:
-                        print(f"    🤖 Validation IA anti-faux positifs...")
+                        print("    🤖 Validation IA anti-faux positifs...")
                         validated_data = self.content_validator.batch_validate_contents(
                             donnees_thematiques, resultat.get('entreprise', {})
                         )
-                        donnees_thematiques = validated_data  # Remplacer par données validées
+                        # Fallback si la validation supprime tout (ou quasi tout)
+                        def _vide(d):
+                            if not d: 
+                                return True
+                            if isinstance(d, dict):
+                                return all((isinstance(v, (list, dict)) and len(v) == 0) for v in d.values())
+                            return False
+
+                        if _vide(validated_data):
+                            print("    ⚠️ Validation IA a vidé les données → fallback vers données originales")
+                            donnees_thematiques = donnees_thematiques_originales
+                        else:
+                            donnees_thematiques = validated_data
                     except Exception as e:
-                        print(f"    ⚠️ Validation IA échouée: {e}")
-                
+                        print(f"    ⚠️ Validation IA échouée: {e} → fallback données originales")
+                        donnees_thematiques = donnees_thematiques_originales
+
                 if not donnees_thematiques:
-                    print(f"    ⚠️ Aucune donnée thématique")
-                    # Structure minimale
-                    entreprise_base = resultat.get('entreprise', {})
+                    print("    ⚠️ Aucune donnée thématique")
+                    entreprise_base = resultat.get('entreprise', {}).copy()
                     entreprise_base.update({
-                        'analyse_thematique': {thematique: {'trouve': False, 'score_pertinence': 0.0} for thematique in self.thematiques},
+                        'analyse_thematique': {t: {'trouve': False, 'score_pertinence': 0.0} for t in self.thematiques},
                         'score_global': 0.0,
                         'thematiques_principales': [],
                         'date_analyse': datetime.now().isoformat()
                     })
                     entreprises_enrichies.append(entreprise_base)
                     continue
-                
-                # Analyse avec la méthode corrigée
-                entreprise_enrichie = self._analyser_entreprise(resultat)
+
+                # Analyse standard
+                entreprise_enrichie = self._analyser_entreprise({'entreprise': resultat.get('entreprise', {}), 
+                                                                'donnees_thematiques': donnees_thematiques})
                 entreprises_enrichies.append(entreprise_enrichie)
-                
-                # Logging des résultats
+
                 if logger:
-                    thematiques_detectees = entreprise_enrichie.get('thematiques_principales', [])
-                    score_global = entreprise_enrichie.get('score_global', 0.0)
-                    
                     logger.log_analyse_thematique(
                         nom_entreprise=nom_entreprise,
-                        thematiques=thematiques_detectees,
-                        score=score_global
+                        thematiques=entreprise_enrichie.get('thematiques_principales', []),
+                        score=entreprise_enrichie.get('score_global', 0.0)
                     )
-                    
-                    if score_global > 0.0:
-                        print(f"    🎉 SUCCÈS: {nom_entreprise} → score {score_global:.3f}")
-                
+
             except Exception as e:
                 print(f"    ❌ Erreur analyse {nom_entreprise}: {e}")
-                import traceback
-                traceback.print_exc()
-                
+                import traceback; traceback.print_exc()
                 if logger:
                     logger.log_analyse_thematique(nom_entreprise, [], 0.0, erreurs=[str(e)])
-                
-                # Structure d'erreur
-                entreprise_base = resultat.get('entreprise', {})
+                entreprise_base = resultat.get('entreprise', {}).copy()
                 entreprise_base.update({
-                    'analyse_thematique': {thematique: {'trouve': False, 'score_pertinence': 0.0} for thematique in self.thematiques},
+                    'analyse_thematique': {t: {'trouve': False, 'score_pertinence': 0.0} for t in self.thematiques},
                     'score_global': 0.0,
                     'thematiques_principales': [],
                     'date_analyse': datetime.now().isoformat(),
@@ -934,25 +1032,93 @@ class AnalyseurThematiques:
                 })
                 entreprises_enrichies.append(entreprise_base)
                 continue
-        
-        # Statistiques de détection
+
         entreprises_actives = [e for e in entreprises_enrichies if e.get('score_global', 0) > 0.2]
         entreprises_tres_actives = [e for e in entreprises_enrichies if e.get('score_global', 0) > 0.5]
-        
+
         print(f"✅ Analyse terminée pour {len(entreprises_enrichies)} entreprises")
         print(f"🎯 Entreprises actives (>0.2): {len(entreprises_actives)}")
         print(f"🏆 Entreprises très actives (>0.5): {len(entreprises_tres_actives)}")
-        
+
         if len(entreprises_actives) > 0:
             print("🎉 SUCCÈS : Entreprises détectées !")
             for ent in entreprises_actives[:3]:
-                nom = ent.get('nom', 'N/A')
-                score = ent.get('score_global', 0)
-                themes = ent.get('thematiques_principales', [])
-                print(f"    • {nom}: {score:.3f} → {themes}")
-        
+                print(f"    • {ent.get('nom', 'N/A')}: {ent.get('score_global', 0):.3f} → {ent.get('thematiques_principales', [])}")
+
         return entreprises_enrichies
 
+
+
+    def _reclasser_offres_emploi(self, donnees_thematiques: dict) -> dict:
+        """
+        Détecte les offres d'emploi rangées par erreur sous 'evenements'
+        et les bascule sous 'recrutements'.
+        """
+        if not isinstance(donnees_thematiques, dict):
+            return donnees_thematiques
+
+        def _contient_emploi(extrait_txt: str) -> bool:
+            t = (extrait_txt or "").lower()
+            mots = [
+                'offre', 'emploi', 'recrute', 'recrutement', 'cdi', 'cdd',
+                'alternance', 'apprentissage', 'stage', 'poste', 'candidatez',
+                'nous recrutons', 'france travail', 'indeed', 'hellowork', 'welcometothejungle'
+            ]
+            return any(m in t for m in mots)
+
+        src_evt = donnees_thematiques.get('evenements')
+        if not src_evt:
+            return donnees_thematiques
+
+        # On va scanner les extraits de "evenements"
+        elements = []
+        if isinstance(src_evt, dict):
+            elements = src_evt.get('extraits_textuels') or []
+        elif isinstance(src_evt, list):
+            elements = src_evt
+
+        # Y a-t-il des indices d'offres d'emploi ?
+        emploi_detecte = False
+        for el in elements[:10]:
+            if isinstance(el, dict):
+                blob = " ".join([
+                    str(el.get('titre', '')),
+                    str(el.get('description', '')),
+                    str(el.get('extrait_complet', '')),
+                    str(el.get('url', ''))
+                ])
+            else:
+                blob = str(el)
+            if _contient_emploi(blob):
+                emploi_detecte = True
+                break
+
+        if emploi_detecte:
+            bloc_recrut = donnees_thematiques.get('recrutements')
+            # On fusionne proprement
+            if isinstance(src_evt, dict):
+                if isinstance(bloc_recrut, dict):
+                    # concaténer les extraits
+                    ex_evt = src_evt.get('extraits_textuels') or []
+                    ex_rec = bloc_recrut.get('extraits_textuels') or []
+                    bloc_recrut['extraits_textuels'] = (ex_rec + ex_evt)[:50]
+                else:
+                    donnees_thematiques['recrutements'] = src_evt
+            elif isinstance(src_evt, list):
+                if isinstance(bloc_recrut, dict):
+                    ex_rec = bloc_recrut.get('extraits_textuels') or []
+                    bloc_recrut['extraits_textuels'] = (ex_rec + src_evt)[:50]
+                elif isinstance(bloc_recrut, list):
+                    donnees_thematiques['recrutements'] = (bloc_recrut + src_evt)[:50]
+                else:
+                    donnees_thematiques['recrutements'] = src_evt
+
+            # On vide la partie 'evenements' devenue redondante
+            donnees_thematiques['evenements'] = {'extraits_textuels': []}
+
+        return donnees_thematiques
+
+    
     def _analyser_donnee_thematique(self, thematique: str, donnee: Dict, source: str, resultats_thematiques: Dict):
         """✅ NOUVEAU : Analyse d'une donnée thématique spécifique"""
         if not isinstance(donnee, dict):

@@ -152,23 +152,25 @@ class ExtracteurDonnees:
         return url_str
 
     def extraire_echantillon(self, nb_entreprises: int = 10) -> List[Dict]:
-        """Version corrigée avec filtrage PME"""
-        
-        # Votre code existant jusqu'à :
+        """Version robuste avec filtrage PME/territoire non bloquant."""
         donnees_propres = self.nettoyer_donnees()
-        
-        # 1. Filtrage standard (votre code existant)
+
+        # Filtrage standard
         entreprises_completes = donnees_propres[
             (donnees_propres['siret_valide'] == True) &
             (donnees_propres['nom_normalise'] != "") &
             (~donnees_propres['nom_normalise'].str.contains('NON-DIFFUSIBLE', case=False, na=False))
         ]
-        
-        # 2. ✅ NOUVEAU : Filtrage PME territorial
-        from scripts.filtreur_pme import FiltreurPME
-        filtreur = FiltreurPME()
-        
-        # Conversion en liste de dicts pour le filtreur
+
+        # Essayer d'importer le filtreur PME – si absent, continuer sans bloquer
+        filtreur = None
+        try:
+            from scripts.filtreur_pme import FiltreurPME
+            filtreur = FiltreurPME()
+        except Exception as e:
+            print(f"⚠️  FiltreurPME indisponible ({e}) → poursuite sans filtre spécifique")
+
+        # Conversion en liste de dicts
         entreprises_list = []
         for _, row in entreprises_completes.iterrows():
             entreprise = {
@@ -184,18 +186,44 @@ class ExtracteurDonnees:
                 'donnees_brutes': row.to_dict()
             }
             entreprises_list.append(entreprise)
-        
-        # 3. Filtrage territorial + PME
-        entreprises_territoire = filtreur.filtrer_par_territoire(entreprises_list)
-        pme_recherchables = filtreur.filtrer_pme_recherchables(entreprises_territoire)
-        
-        # 4. Sélection finale
-        entreprises_finales = pme_recherchables[:nb_entreprises]
-        
-        print(f"📊 Total → Territoire → PME → Final")
-        print(f"📊 {len(entreprises_list)} → {len(entreprises_territoire)} → {len(pme_recherchables)} → {len(entreprises_finales)}")
-        
+
+        entreprises_filtrees = entreprises_list
+
+        # Filtrage territoire + PME si disponible
+        if filtreur is not None:
+            try:
+                entreprises_territoire = filtreur.filtrer_par_territoire(entreprises_list)
+                pme_recherchables = filtreur.filtrer_pme_recherchables(entreprises_territoire)
+
+                # ✅ Fallback progressif si ça vide tout
+                if len(pme_recherchables) > 0:
+                    entreprises_filtrees = pme_recherchables
+                elif len(entreprises_territoire) > 0:
+                    print("⚠️  Filtre PME trop restrictif → fallback aux entreprises du territoire")
+                    entreprises_filtrees = entreprises_territoire
+                else:
+                    print("⚠️  Filtre territoire vide → on garde la liste complète")
+                    entreprises_filtrees = entreprises_list
+            except Exception as e:
+                print(f"⚠️  Erreur filtrage PME/territoire ({e}) → on garde la liste complète")
+
+        # Sélection finale
+        entreprises_finales = entreprises_filtrees[:nb_entreprises]
+
+        print("📊 Total → Territoire → PME → Final")
+        if filtreur is not None:
+            try:
+                print(f"📊 {len(entreprises_list)} → "
+                    f"{len(entreprises_territoire)} → "
+                    f"{len(pme_recherchables)} → "
+                    f"{len(entreprises_finales)}")
+            except:
+                print(f"📊 {len(entreprises_list)} → ? → ? → {len(entreprises_finales)}")
+        else:
+            print(f"📊 {len(entreprises_list)} → (pas de filtre) → {len(entreprises_finales)}")
+
         return entreprises_finales
+
 
     def _selection_stratifiee(self, df: pd.DataFrame, nb_total: int) -> pd.DataFrame:
         """Sélection stratifiée par commune pour représentativité"""

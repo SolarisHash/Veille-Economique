@@ -151,6 +151,24 @@ class AIContentValidator:
             # Fallback en cas d'erreur : validation basique
             return self._fallback_validation(content, nom_entreprise, thematique)
     
+    def validate_minimum_fields(self, item: dict, source_type: str = "web_general") -> bool:
+        """
+        Valide les champs minimaux.
+        - Commune obligatoire sauf si source_type == 'site_officiel'
+        """
+        if not isinstance(item, dict):
+            return False
+
+        # Nom d'entreprise
+        nom_ok = bool(str(item.get('nom') or '').strip())
+        # SIRET (facultatif pour l'info web, mais utile)
+        siret_ok = True  # on ne bloque pas si absent côté web
+        # Commune (obligatoire sauf site officiel)
+        commune = (item.get('commune') or item.get('commune_normalise') or "").strip()
+        commune_ok = bool(commune) or (source_type == 'site_officiel')
+
+        return nom_ok and siret_ok and commune_ok
+    
     def _get_content_validation_system_prompt(self) -> str:
         """Prompt système spécialisé pour la validation de contenu"""
         return """Tu es un expert en analyse de contenu spécialisé dans la détection des faux positifs.

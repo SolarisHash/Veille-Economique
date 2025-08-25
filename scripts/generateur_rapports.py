@@ -398,39 +398,56 @@ class GenerateurRapports:
         return str(chemin_fichier)
     
     def _calculer_statistiques_sans_scores(self, entreprises: List[Dict]) -> Dict:
-        """✅ Calcul des statistiques globales SANS SCORES (avec déduplication)"""
-        # --- AJOUT: déduplication entreprises (SIRET + Nom) ---
-        uniques = {}
-        for e in entreprises:
-            cle = f"{e.get('siret','')}_{e.get('nom','')}".strip('_')
-            if cle not in uniques:
-                uniques[cle] = e
-        entreprises_uniques = list(uniques.values())
-        # -------------------------------------------------------
+        """✅ Stats globales corrigées : 'actives' = au moins UNE thématique trouvée
+        (on ne dépend plus uniquement d'un seuil de score_global)."""
+        def est_active(e: Dict) -> bool:
+            res = e.get('analyse_thematique', {})
+            return any(v.get('trouve', False) for v in res.values())
 
-        # Filtrage entreprises actives (avec activité détectée)
-        entreprises_actives = [e for e in entreprises_uniques if e.get('score_global', 0) > 0.1]
+        nb_total = len(entreprises)
+        entreprises_actives = [e for e in entreprises if est_active(e)]
 
         stats = {
-            'nb_total': len(entreprises_uniques),                                  # AJOUT
+            'nb_total': nb_total,
             'nb_actives': len(entreprises_actives),
-            'pourcentage_actives': round((len(entreprises_actives) / len(entreprises_uniques)) * 100, 1) if len(entreprises_uniques) > 0 else 0,  # AJOUT
-            'nb_communes': len(set(e.get('commune', '') for e in entreprises_uniques)),
+            'pourcentage_actives': round((len(entreprises_actives) / nb_total) * 100, 1) if nb_total else 0.0,
+            'nb_communes': len({(e.get('commune') or '').strip() for e in entreprises if (e.get('commune') or '').strip()}),
             'thematiques_stats': {}
         }
 
         for thematique in self.thematiques:
-            # Comptage sur entreprises UNIQUES
             nb_entreprises = sum(
-                1 for e in entreprises_uniques 
+                1 for e in entreprises
                 if e.get('analyse_thematique', {}).get(thematique, {}).get('trouve', False)
             )
             stats['thematiques_stats'][thematique] = {
                 'count': nb_entreprises,
-                'percentage': round((nb_entreprises / len(entreprises_uniques)) * 100, 1) if len(entreprises_uniques) else 0
+                'percentage': round((nb_entreprises / nb_total) * 100, 1) if nb_total else 0.0
             }
 
         return stats
+    
+    def _calcul_stats_globales(self, entreprises_enrichies: list) -> dict:
+        # Unicité par SIRET si dispo, sinon (nom, commune)
+        def _key(e):
+            siret = str(e.get('siret') or e.get('SIRET') or '').strip()
+            if siret:
+                return ('SIRET', siret)
+            return ('NC', (e.get('nom') or '').strip().lower(), (e.get('commune') or '').strip().lower())
+
+        uniques = {}
+        for e in entreprises_enrichies:
+            uniques[_key(e)] = e
+        uniq_list = list(uniques.values())
+
+        actives = [e for e in uniq_list if self._est_active(e)]
+
+        return {
+            'total_entreprises': len(uniq_list),
+            'entreprises_actives': len(actives),
+            'taux_activite': round(100.0 * len(actives) / len(uniq_list), 1) if uniq_list else 0.0,
+            'communes_uniques': len({(e.get('commune') or '').strip().lower() for e in uniq_list if (e.get('commune') or '').strip()})
+        }
 
         
     def _generer_html_template_sans_scores(self, entreprises: List[Dict], stats: Dict) -> str:
@@ -697,45 +714,62 @@ class GenerateurRapports:
         }
 
     def _generer_section_thematiques_detaillee_sans_scores(self, entreprises: List[Dict], stats: Dict) -> str:
-        """Génère une section thématiques détaillée sous le graphique"""
-        
+        """Génère une section thématiques détaillée sous le graphique, en comptant
+        des entreprises uniques par (SIRET si présent, sinon (nom, commune)),
+        et en affichant des noms sans doublons."""
         html = '<div style="margin-top: 30px;">'
-        
+
+        def cle_entreprise(e: Dict):
+            siret = (e.get('siret') or '').strip()
+            if siret:
+                return ('SIRET', siret)
+            return ('NOMCOMMUNE', (e.get('nom') or '').strip().lower(), (e.get('commune') or '').strip().lower())
+
         thematiques_stats = stats.get('thematiques_stats', {})
-        thematiques_triees = sorted(
-            thematiques_stats.items(), 
-            key=lambda x: x[1]['count'], 
-            reverse=True
-        )
-        
+        thematiques_triees = sorted(thematiques_stats.items(), key=lambda x: x[1]['count'], reverse=True)
+
         for thematique, data in thematiques_triees:
-            if data['count'] > 0:
-                entreprises_thematique = [
-                    e for e in entreprises 
-                    if e.get('analyse_thematique', {}).get(thematique, {}).get('trouve', False)
-                ][:3]  # Top 3
-                
+            if data['count'] <= 0:
+                continue
+
+            # Uniques par clé
+            uniques = {}
+            for e in entreprises:
+                if e.get('analyse_thematique', {}).get(thematique, {}).get('trouve', False):
+                    uniques[cle_entreprise(e)] = e
+            entreprises_uniques = list(uniques.values())
+
+            # Top 3 visuels (ordre alpha par nom)
+            top = sorted(entreprises_uniques, key=lambda x: (x.get('nom') or '').lower())[:3]
+
+            html += f'''
+            <div style="margin: 20px 0; padding: 20px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #3498db;">
+                <h4 style="margin: 0 0 15px 0; color: #2c3e50;">
+                    {thematique.replace('_', ' ').title()}
+                    <span style="color: #7f8c8d; font-weight: normal;">({len(entreprises_uniques)} entreprises uniques)</span>
+                </h4>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
+            '''
+
+            deja_vus = set()
+            for e in top:
+                nom = (e.get('nom') or '').strip()
+                if nom.lower() in deja_vus:
+                    continue
+                deja_vus.add(nom.lower())
+
                 html += f'''
-                <div style="margin: 20px 0; padding: 20px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #3498db;">
-                    <h4 style="margin: 0 0 15px 0; color: #2c3e50;">
-                        {thematique.replace('_', ' ').title()} 
-                        <span style="color: #7f8c8d; font-weight: normal;">({data['count']} entreprises)</span>
-                    </h4>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
+                <div style="background: white; padding: 15px; border-radius: 6px; border: 1px solid #e9ecef;">
+                    <div style="font-weight: bold; color: #2c3e50;">{nom}</div>
+                    <div style="color: #7f8c8d; font-size: 0.9em; margin-top: 5px;">{e.get('commune') or ''}</div>
+                </div>
                 '''
-                
-                for entreprise in entreprises_thematique:
-                    html += f'''
-                    <div style="background: white; padding: 15px; border-radius: 6px; border: 1px solid #e9ecef;">
-                        <div style="font-weight: bold; color: #2c3e50;">{entreprise['nom']}</div>
-                        <div style="color: #7f8c8d; font-size: 0.9em; margin-top: 5px;">{entreprise['commune']}</div>
-                    </div>
-                    '''
-                
-                html += '</div></div>'
-        
+
+            html += '</div></div>'
+
         html += '</div>'
         return html
+
         
     def _generer_section_thematiques_sans_scores(self, entreprises: List[Dict], stats: Dict) -> str:
         """✅ Génération de la section thématiques SANS SCORES"""
@@ -784,54 +818,104 @@ class GenerateurRapports:
         return html
         
     def _generer_section_communes_sans_scores(self, entreprises: List[Dict]) -> str:
-        """✅ Section communes améliorée avec cartes visuelles"""
-        communes_data = {}
-        
-        # Seulement les entreprises avec activité
-        entreprises_actives = [e for e in entreprises if e.get('score_global', 0) > 0.1]
-        
-        for entreprise in entreprises_actives:
-            commune = entreprise.get('commune', 'Inconnue')
+        """
+        Section communes (SANS SCORES) — robuste aux types (commune/nom/secteur parfois non-str),
+        déduplication par SIREN (fallback SIRET puis (nom, commune)), et listes sans doublon.
+        """
+
+        # 0) Normalisation stricte des champs utilisés (évite 'int'.strip)
+        entreprises_norm = []
+        for e in entreprises:
+            e2 = dict(e)  # shallow copy
+
+            # Champs stringifiés
+            for k in ("commune", "nom", "secteur_naf", "siret", "siren"):
+                v = e2.get(k, "")
+                e2[k] = "" if v is None else str(v)
+
+            # Analyse thématique toujours présente (dict) pour any(...)
+            e2["analyse_thematique"] = e2.get("analyse_thematique") or {}
+
+            entreprises_norm.append(e2)
+        entreprises = entreprises_norm
+
+        # 1) Filtrage "actives" = au moins une thématique trouvée (plus robuste que score)
+        def est_active(ent: Dict) -> bool:
+            at = ent.get("analyse_thematique", {})
+            try:
+                return any(bool(v.get("trouve")) for v in at.values())
+            except Exception:
+                return False
+
+        entreprises_actives = [e for e in entreprises if est_active(e)]
+
+        # 2) Déduplication par entité économique
+        #    Clé d'unicité : SIREN (prioritaire) -> SIRET -> (nom_normalisé, commune_normalisée)
+        def cle_entite(e: Dict):
+            siren = e.get("siren", "").strip()
+            if siren:
+                return ("SIREN", siren)
+            siret = e.get("siret", "").strip()
+            if siret:
+                return ("SIRET", siret)
+            nom = e.get("nom", "").strip().lower()
+            com = e.get("commune", "").strip().lower()
+            return ("NOMCOMMUNE", nom, com)
+
+        uniques = {}
+        for e in entreprises_actives:
+            uniques[cle_entite(e)] = e  # overwrite safe
+
+        # 3) Regroupement par commune (string sécurisée)
+        communes_data: Dict[str, Dict] = {}
+        for e in uniques.values():
+            commune = e.get("commune", "").strip()
+            if not commune:
+                commune = "Inconnue"
+
             if commune not in communes_data:
                 communes_data[commune] = {
-                    'entreprises': [],
-                    'thematiques': set(),
-                    'secteurs': set()
+                    "entreprises": [],
+                    "thematiques": set(),
+                    "secteurs": set(),
                 }
-            
-            communes_data[commune]['entreprises'].append(entreprise)
-            
-            # Collecte des thématiques
-            thematiques_entreprise = entreprise.get('thematiques_principales', [])
-            communes_data[commune]['thematiques'].update(thematiques_entreprise)
-            
-            # Collecte des secteurs (simplifié)
-            secteur = entreprise.get('secteur_naf', '')
+            communes_data[commune]["entreprises"].append(e)
+
+            # Thématiques principales (si présentes)
+            for th in (e.get("thematiques_principales") or []):
+                communes_data[commune]["thematiques"].add(str(th))
+
+            # Secteur simplifié = 1er token du NAF si dispo
+            secteur = e.get("secteur_naf", "").strip()
             if secteur:
-                secteur_simplifie = secteur.split()[0] if secteur else 'Autre'
-                communes_data[commune]['secteurs'].add(secteur_simplifie)
-        
-        # Tri des communes par nombre d'entreprises actives
-        communes_triees = sorted(communes_data.items(), key=lambda x: len(x[1]['entreprises']), reverse=True)
-        
+                communes_data[commune]["secteurs"].add(secteur.split()[0])
+
+        # 4) Tri des communes par nb d’entreprises actives
+        communes_triees = sorted(communes_data.items(), key=lambda x: len(x[1]["entreprises"]), reverse=True)
+
+        # 5) Rendu HTML (noms d’entreprises sans doublon)
+        if not communes_triees:
+            return '<div style="text-align: center; padding: 40px; color: #7f8c8d;">Aucune commune avec activité détectée</div>'
+
         html = '<div class="communes-grid">'
-        
+
         for commune, data in communes_triees:
-            nb_entreprises = len(data['entreprises'])
-            nb_thematiques = len(data['thematiques'])
-            nb_secteurs = len(data['secteurs'])
-            
-            # Entreprises exemple (top 3)
-            entreprises_exemple = [e['nom'] for e in data['entreprises'][:3]]
-            
-            # Thématiques principales
-            thematiques_liste = list(data['thematiques'])[:3]
-            thematiques_affichage = ', '.join([t.replace('_', ' ').title() for t in thematiques_liste])
-            
+            nb_entreprises = len(data["entreprises"])
+            nb_thematiques = len(data["thematiques"])
+            nb_secteurs = len(data["secteurs"])
+
+            # Noms uniques et triés pour lisibilité
+            noms_uniques = sorted({(e.get("nom") or "").strip() for e in data["entreprises"] if (e.get("nom") or "").strip()})
+            exemples = noms_uniques[:3]
+
+            # Thématiques principales (formatées)
+            thematiques_liste = list(data["thematiques"])[:3]
+            thematiques_affichage = ", ".join(t.replace("_", " ").title() for t in thematiques_liste)
+
             html += f'''
             <div class="commune-card">
                 <h4>📍 {commune}</h4>
-                
+
                 <div class="commune-stats">
                     <div class="commune-stat">
                         <div class="number">{nb_entreprises}</div>
@@ -846,32 +930,27 @@ class GenerateurRapports:
                         <div class="label">Secteurs</div>
                     </div>
                 </div>
-                
+
                 <div style="margin-bottom: 15px;">
                     <div style="font-weight: bold; color: #34495e; margin-bottom: 8px;">🏢 Entreprises actives :</div>
                     <div style="font-size: 0.9em; color: #2c3e50; line-height: 1.4;">
-                        {', '.join(entreprises_exemple)}
-                        {f' et {nb_entreprises - 3} autres...' if nb_entreprises > 3 else ''}
+                        {", ".join(exemples)}{' et ' + str(nb_entreprises - 3) + ' autres...' if nb_entreprises > 3 else ''}
                     </div>
                 </div>
-                
-                {f'''
+
+                {f"""
                 <div>
                     <div style="font-weight: bold; color: #34495e; margin-bottom: 8px;">🎯 Activités principales :</div>
-                    <div style="font-size: 0.9em; color: #2c3e50;">
-                        {thematiques_affichage}
-                    </div>
+                    <div style="font-size: 0.9em; color: #2c3e50;">{thematiques_affichage}</div>
                 </div>
-                ''' if thematiques_affichage else ''}
+                """ if thematiques_affichage else ""}
             </div>
             '''
-        
-        html += '</div>'
-        
-        if not communes_triees:
-            html = '<div style="text-align: center; padding: 40px; color: #7f8c8d;">Aucune commune avec activité détectée</div>'
-        
+
+        html += "</div>"
         return html
+
+
 
     def _generer_section_entreprises_sans_scores(self, entreprises: List[Dict]) -> str:
         """✅ Section entreprises HTML SANS SCORES - Seulement les actives"""
@@ -1194,3 +1273,79 @@ class GenerateurRapports:
         noms = [e.get('nom') or e.get('enseigne') or '' for e in etablissements]
         nom = max(noms, key=len) if noms else f"SIREN {siren}"
         return f"{nom} — SIREN {siren}"
+
+    def _est_active(self, ent: dict) -> bool:
+        at = ent.get('analyse_thematique', {})
+        return any(v.get('trouve') for v in at.values())
+
+    def _synthese_par_thematique(self, entreprises_enrichies: list) -> dict:
+        # clé d’unicité
+        def _key(e):
+            siret = str(e.get('siret') or e.get('SIRET') or '').strip()
+            if siret:
+                return ('SIRET', siret)
+            return ('NC', (e.get('nom') or '').strip().lower(), (e.get('commune') or '').strip().lower())
+
+        # uniques
+        uniques = {}
+        for e in entreprises_enrichies:
+            uniques[_key(e)] = e
+        uniq_list = list(uniques.values())
+
+        out = {}  # thematique -> {'nb': int, 'entreprises': [(nom, commune)]}
+        for e in uniq_list:
+            at = e.get('analyse_thematique', {})
+            for th, v in (at or {}).items():
+                if v.get('trouve'):
+                    out.setdefault(th, {'set': set(), 'entreprises': []})
+                    k = ( (e.get('nom') or '').strip(), (e.get('commune') or '').strip() )
+                    if k not in out[th]['set']:
+                        out[th]['set'].add(k)
+                        out[th]['entreprises'].append(k)
+
+        # convertir en comptages
+        for th, d in out.items():
+            d['nb'] = len(d['entreprises'])
+            d.pop('set', None)
+
+        return out
+
+    def _resume_par_commune(self, entreprises_enrichies: list) -> dict:
+        # Regroupement par commune
+        communes = {}
+        for e in entreprises_enrichies:
+            com = (e.get('commune') or '').strip()
+            if not com:
+                continue
+            communes.setdefault(com, []).append(e)
+
+        resume = {}
+        for com, ents in communes.items():
+            # dé-dup par SIRET puis par nom normalisé
+            seen = set()
+            uniques = []
+            for e in ents:
+                siret = str(e.get('siret') or e.get('SIRET') or '').strip()
+                nom = (e.get('nom') or '').strip().lower()
+                key = ('SIRET', siret) if siret else ('NOM', nom)
+                if key in seen:
+                    continue
+                seen.add(key)
+                uniques.append(e)
+
+            # thematiques dominantes (sur uniques)
+            from collections import Counter
+            c = Counter()
+            for e in uniques:
+                at = e.get('analyse_thematique', {})
+                for th, v in (at or {}).items():
+                    if v.get('trouve'):
+                        c[th] += 1
+
+            resume[com] = {
+                'nb_entreprises': len(uniques),
+                'entreprises': [( (e.get('nom') or '').strip(), (e.get('commune') or '').strip() ) for e in uniques],
+                'thematiques_dominantes': [t for t,_ in c.most_common(3)]
+            }
+
+        return resume

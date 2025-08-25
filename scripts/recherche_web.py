@@ -2362,6 +2362,183 @@ class RechercheWeb:
             print(f"          ⚠️  Erreur Bing: {str(e)}")
             return None
 
+    def _rechercher_qwant(self, requete: str):
+        """
+        Qwant HTML (très basique). Si indisponible, on fallback sur Bing.
+        """
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept-Language': 'fr-FR,fr;q=0.9'
+            }
+            # Qwant renvoie souvent un interstitial/JS. On tente, sinon on fallback.
+            url = "https://www.qwant.com/?q=" + quote_plus(requete) + "&t=web&locale=fr_FR"
+            resp = self.session.get(url, headers=headers, timeout=12)
+            if resp.status_code != 200 or "qwant.com" not in resp.url:
+                # interstitial ou échec → fallback
+                return self._rechercher_bing(requete)
+
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            items = []
+            # Sélecteurs simples (peu stables, d’où le fallback bing ci‑dessus)
+            for a in soup.select('a[href^="http"]')[:5]:
+                titre = a.get_text(strip=True)
+                url_res = a.get('href', '')
+                if titre and url_res and "qwant.com" not in url_res:
+                    items.append({
+                        'titre': titre,
+                        'description': '',
+                        'url': url_res,
+                        'extrait_complet': titre
+                    })
+
+            return items if items else None
+        except Exception:
+            # Ne JAMAIS planter : fallback Bing
+            return self._rechercher_bing(requete)
+
+
+    def _rechercher_ecosia(self, requete: str):
+        """
+        Ecosia HTML léger. En cas d’échec, fallback Bing.
+        """
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept-Language': 'fr-FR,fr;q=0.9'
+            }
+            url = "https://www.ecosia.org/search?q=" + quote_plus(requete)
+            resp = self.session.get(url, headers=headers, timeout=12)
+            if resp.status_code != 200:
+                return self._rechercher_bing(requete)
+
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            items = []
+            for res in soup.select('a.result-title')[:5]:
+                titre = res.get_text(strip=True)
+                url_res = res.get('href', '')
+                if titre and url_res:
+                    items.append({
+                        'titre': titre,
+                        'description': '',
+                        'url': url_res,
+                        'extrait_complet': titre
+                    })
+            return items if items else None
+        except Exception:
+            return self._rechercher_bing(requete)
+
+
+    def _rechercher_searx(self, requete: str):
+        """
+        SearX/SearXNG : sans instance publique figée -> on fallback directement à Bing.
+        (Si tu disposes d’une URL d’instance, on pourra la brancher ici.)
+        """
+        return self._rechercher_bing(requete)
+
+
+    def _rechercher_startpage(self, requete: str):
+        """
+        Startpage est souvent protégé côté scraping ; tentative minimale puis fallback.
+        """
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept-Language': 'fr-FR,fr;q=0.9'
+            }
+            url = "https://www.startpage.com/sp/search?query=" + quote_plus(requete)
+            resp = self.session.get(url, headers=headers, timeout=12)
+            if resp.status_code != 200:
+                return self._rechercher_bing(requete)
+
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            items = []
+            for a in soup.select('a[class*="w-gl__result-title"]')[:5]:
+                titre = a.get_text(strip=True)
+                url_res = a.get('href', '')
+                if titre and url_res:
+                    items.append({
+                        'titre': titre,
+                        'description': '',
+                        'url': url_res,
+                        'extrait_complet': titre
+                    })
+            return items if items else None
+        except Exception:
+            return self._rechercher_bing(requete)
+
+    def _rechercher_moteur(self, requete: str):
+        """
+        Exécute une recherche avec fallback multi-moteurs.
+        Doit retourner une liste de dicts {'titre','description','url'}.
+        """
+        # Ordre de préférence
+        try:
+            return self._rechercher_bing(requete) or []
+        except Exception as e:
+            print(f"        ❌ Bing KO: {e}")
+
+        try:
+            return self._rechercher_duckduckgo(requete) or []
+        except Exception as e:
+            print(f"        ❌ DuckDuckGo KO: {e}")
+
+        # Compat: certains appels attendent ces noms
+        try:
+            return self._rechercher_google_avec_protection(requete) or []
+        except Exception as e:
+            print(f"        ❌ Google-protection KO: {e}")
+
+        try:
+            return self._rechercher_qwant(requete) or []
+        except Exception as e:
+            print(f"        ❌ Qwant KO: {e}")
+
+        return []
+    
+    def _rechercher_avec_bibliotheque(self, requete: str):
+        """
+        DuckDuckGo via bibliothèque (si installée), sinon None.
+        Évite toute exception pour ne pas casser la cascade.
+        """
+        try:
+            from duckduckgo_search import DDGS  # pip install duckduckgo_search
+            items = []
+            with DDGS() as ddgs:
+                for r in ddgs.text(requete, region='fr-fr', max_results=5):
+                    titre = r.get('title') or ''
+                    url_res = r.get('href') or r.get('url') or ''
+                    desc = r.get('body') or ''
+                    if titre and url_res:
+                        items.append({
+                            'titre': titre,
+                            'description': desc,
+                            'url': url_res,
+                            'extrait_complet': f"{titre} - {desc}" if desc else titre
+                        })
+            return items if items else None
+        except Exception:
+            return None
+
+    def _rechercher_google_avec_protection(self, requete: str):
+        """
+        Compatibilité : certaines parties du code attendent Google.
+        Pour éviter les blocages/quotas, on délègue proprement vers DuckDuckGo.
+        Format de sortie : liste de dicts {'titre', 'description', 'url'}
+        """
+        try:
+            # Tu peux basculer sur Bing si tu préfères :
+            # return self._rechercher_bing(requete)
+            return self._rechercher_duckduckgo(requete)
+        except Exception as e:
+            print(f"        ⚠️ Google-protection fallback → DuckDuckGo a échoué: {e}")
+            # Double fallback sur Bing si DDG tombe
+            try:
+                return self._rechercher_bing(requete)
+            except Exception as e2:
+                print(f"        ⚠️ Google-protection fallback → Bing a échoué: {e2}")
+                return []
+    
     def _recherche_presse_locale(self, entreprise: Dict) -> Optional[Dict]:
         """Recherche dans la presse locale"""
         try:

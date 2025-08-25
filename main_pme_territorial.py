@@ -224,7 +224,7 @@ def main_pme_territorial():
     
     # Configuration
     fichier_excel = "data/input/entreprises_base.xlsx"
-    nb_entreprises = 100
+    nb_entreprises = 10
     
     # Vérification fichier source
     if not os.path.exists(fichier_excel):
