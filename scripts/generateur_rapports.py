@@ -816,15 +816,7 @@ class GenerateurRapports:
                 html += "</div></div>"
                 
         return html
-
-
-    """
-    Corrections pour la génération du rapport HTML dans generateur_rapports.py
-    Résout l'erreur: 'int' object has no attribute 'strip'
-    """
-
-    # CORRECTION 1: Dans la méthode _generer_section_communes_sans_scores
-
+        
     def _generer_section_communes_sans_scores(self, entreprises: List[Dict]) -> str:
         """
         Section communes (SANS SCORES) — robuste aux types (commune/nom/secteur parfois non-str),
@@ -836,18 +828,10 @@ class GenerateurRapports:
         for e in entreprises:
             e2 = dict(e)  # shallow copy
 
-            # ✅ CORRECTION PRINCIPALE: Champs stringifiés avec gestion robuste
+            # Champs stringifiés
             for k in ("commune", "nom", "secteur_naf", "siret", "siren"):
-                v = e2.get(k)
-                # ✅ NOUVELLE GESTION: conversion sécurisée
-                if v is None:
-                    e2[k] = ""
-                elif isinstance(v, (int, float)):
-                    e2[k] = str(v)  # Conversion numérique → string
-                elif isinstance(v, str):
-                    e2[k] = v
-                else:
-                    e2[k] = str(v)  # Fallback pour autres types
+                v = e2.get(k, "")
+                e2[k] = "" if v is None else str(v)
 
             # Analyse thématique toujours présente (dict) pour any(...)
             e2["analyse_thematique"] = e2.get("analyse_thematique") or {}
@@ -868,14 +852,14 @@ class GenerateurRapports:
         # 2) Déduplication par entité économique
         #    Clé d'unicité : SIREN (prioritaire) -> SIRET -> (nom_normalisé, commune_normalisée)
         def cle_entite(e: Dict):
-            siren = str(e.get("siren", "")).strip()
+            siren = e.get("siren", "").strip()
             if siren:
                 return ("SIREN", siren)
-            siret = str(e.get("siret", "")).strip()
+            siret = e.get("siret", "").strip()
             if siret:
                 return ("SIRET", siret)
-            nom = str(e.get("nom", "")).strip().lower()
-            com = str(e.get("commune", "")).strip().lower()
+            nom = e.get("nom", "").strip().lower()
+            com = e.get("commune", "").strip().lower()
             return ("NOMCOMMUNE", nom, com)
 
         uniques = {}
@@ -885,15 +869,7 @@ class GenerateurRapports:
         # 3) Regroupement par commune (string sécurisée)
         communes_data: Dict[str, Dict] = {}
         for e in uniques.values():
-            # ✅ CORRECTION: conversion sécurisée pour commune
-            commune_raw = e.get("commune", "")
-            if isinstance(commune_raw, (int, float)):
-                commune = str(commune_raw).strip()
-            elif isinstance(commune_raw, str):
-                commune = commune_raw.strip()
-            else:
-                commune = str(commune_raw).strip() if commune_raw else ""
-                
+            commune = e.get("commune", "").strip()
             if not commune:
                 commune = "Inconnue"
 
@@ -906,20 +882,18 @@ class GenerateurRapports:
             communes_data[commune]["entreprises"].append(e)
 
             # Thématiques principales (si présentes)
-            thematiques_principales = e.get("thematiques_principales") or []
-            for th in thematiques_principales:
+            for th in (e.get("thematiques_principales") or []):
                 communes_data[commune]["thematiques"].add(str(th))
 
             # Secteur simplifié = 1er token du NAF si dispo
-            secteur_raw = e.get("secteur_naf", "")
-            secteur = str(secteur_raw).strip() if secteur_raw else ""
+            secteur = e.get("secteur_naf", "").strip()
             if secteur:
                 communes_data[commune]["secteurs"].add(secteur.split()[0])
 
-        # 4) Tri des communes par nb d'entreprises actives
+        # 4) Tri des communes par nb d’entreprises actives
         communes_triees = sorted(communes_data.items(), key=lambda x: len(x[1]["entreprises"]), reverse=True)
 
-        # 5) Rendu HTML (noms d'entreprises sans doublon)
+        # 5) Rendu HTML (noms d’entreprises sans doublon)
         if not communes_triees:
             return '<div style="text-align: center; padding: 40px; color: #7f8c8d;">Aucune commune avec activité détectée</div>'
 
@@ -930,22 +904,8 @@ class GenerateurRapports:
             nb_thematiques = len(data["thematiques"])
             nb_secteurs = len(data["secteurs"])
 
-            # ✅ CORRECTION: Noms uniques et triés pour lisibilité (conversion sécurisée)
-            noms_bruts = []
-            for e in data["entreprises"]:
-                nom_raw = e.get("nom", "")
-                if nom_raw:
-                    if isinstance(nom_raw, (int, float)):
-                        nom_clean = str(nom_raw).strip()
-                    elif isinstance(nom_raw, str):
-                        nom_clean = nom_raw.strip()
-                    else:
-                        nom_clean = str(nom_raw).strip()
-                    
-                    if nom_clean:
-                        noms_bruts.append(nom_clean)
-            
-            noms_uniques = sorted(set(noms_bruts))
+            # Noms uniques et triés pour lisibilité
+            noms_uniques = sorted({(e.get("nom") or "").strip() for e in data["entreprises"] if (e.get("nom") or "").strip()})
             exemples = noms_uniques[:3]
 
             # Thématiques principales (formatées)
@@ -989,219 +949,6 @@ class GenerateurRapports:
 
         html += "</div>"
         return html
-
-
-    # CORRECTION 2: Dans la méthode _generer_section_thematiques_detaillee_sans_scores
-
-    def _generer_section_thematiques_detaillee_sans_scores(self, entreprises: List[Dict], stats: Dict) -> str:
-        """Génère une section thématiques détaillée sous le graphique, en comptant
-        des entreprises uniques par (SIRET si présent, sinon (nom, commune)),
-        et en affichant des noms sans doublons."""
-        html = '<div style="margin-top: 30px;">'
-
-        def cle_entreprise(e: Dict):
-            # ✅ CORRECTION: conversion sécurisée pour SIRET
-            siret_raw = e.get('siret')
-            if siret_raw:
-                siret = str(siret_raw).strip()
-                if siret:
-                    return ('SIRET', siret)
-            
-            # ✅ CORRECTION: conversion sécurisée pour nom et commune
-            nom_raw = e.get('nom', '')
-            commune_raw = e.get('commune', '')
-            
-            nom = str(nom_raw).strip().lower() if nom_raw else ''
-            commune = str(commune_raw).strip().lower() if commune_raw else ''
-            
-            return ('NOMCOMMUNE', nom, commune)
-
-        thematiques_stats = stats.get('thematiques_stats', {})
-        thematiques_triees = sorted(thematiques_stats.items(), key=lambda x: x[1]['count'], reverse=True)
-
-        for thematique, data in thematiques_triees:
-            if data['count'] <= 0:
-                continue
-
-            # Uniques par clé
-            uniques = {}
-            for e in entreprises:
-                if e.get('analyse_thematique', {}).get(thematique, {}).get('trouve', False):
-                    uniques[cle_entreprise(e)] = e
-            entreprises_uniques = list(uniques.values())
-
-            # ✅ CORRECTION: Top 3 visuels avec conversion sécurisée
-            entreprises_avec_noms_surs = []
-            for e in entreprises_uniques:
-                nom_raw = e.get('nom', '')
-                nom = str(nom_raw).lower() if nom_raw else ''
-                e_copie = e.copy()
-                e_copie['_nom_normalise'] = nom
-                entreprises_avec_noms_surs.append(e_copie)
-            
-            top = sorted(entreprises_avec_noms_surs, key=lambda x: x['_nom_normalise'])[:3]
-
-            html += f'''
-            <div style="margin: 20px 0; padding: 20px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #3498db;">
-                <h4 style="margin: 0 0 15px 0; color: #2c3e50;">
-                    {thematique.replace('_', ' ').title()}
-                    <span style="color: #7f8c8d; font-weight: normal;">({len(entreprises_uniques)} entreprises uniques)</span>
-                </h4>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
-            '''
-
-            deja_vus = set()
-            for e in top:
-                # ✅ CORRECTION: conversion sécurisée pour l'affichage
-                nom_raw = e.get('nom', '')
-                commune_raw = e.get('commune', '')
-                
-                nom = str(nom_raw).strip() if nom_raw else 'Nom non disponible'
-                commune = str(commune_raw).strip() if commune_raw else 'Commune non disponible'
-                
-                nom_lower = nom.lower()
-                if nom_lower in deja_vus:
-                    continue
-                deja_vus.add(nom_lower)
-
-                html += f'''
-                <div style="background: white; padding: 15px; border-radius: 6px; border: 1px solid #e9ecef;">
-                    <div style="font-weight: bold; color: #2c3e50;">{nom}</div>
-                    <div style="color: #7f8c8d; font-size: 0.9em; margin-top: 5px;">{commune}</div>
-                </div>
-                '''
-
-            html += '</div></div>'
-
-        html += '</div>'
-        return html
-
-
-    # CORRECTION 3: Dans la méthode _creer_dataframe_principal
-
-    def _creer_dataframe_principal(self, entreprises: List[Dict]) -> pd.DataFrame:
-        """Version SANS SCORES - Focus sur les entreprises actives uniquement"""
-        donnees = []
-        
-        for entreprise in entreprises:
-            # ✅ FILTRAGE : Seulement les entreprises avec activité
-            if entreprise.get('score_global', 0) <= 0.1:
-                continue  # Skip les entreprises sans activité
-            
-            # ✅ CORRECTION: Conversion sécurisée de tous les champs
-            def safe_str(value):
-                if value is None:
-                    return ''
-                elif isinstance(value, (int, float)):
-                    return str(value)
-                elif isinstance(value, str):
-                    return value
-                else:
-                    return str(value)
-            
-            ligne = {
-                # Données de base (avec conversion sécurisée)
-                'SIRET': safe_str(entreprise.get('siret', '')),
-                'Nom': safe_str(entreprise.get('nom', '')),
-                'Enseigne': safe_str(entreprise.get('enseigne', '')),
-                'Commune': safe_str(entreprise.get('commune', '')),
-                'Secteur_NAF': safe_str(entreprise.get('secteur_naf', '')),
-                'Code_NAF': safe_str(entreprise.get('code_naf', '')),
-                'Site_Web': safe_str(entreprise.get('site_web', '')),
-                'Dirigeant': safe_str(entreprise.get('dirigeant', '')),
-                
-                'Date_Analyse': safe_str(entreprise.get('date_analyse', '')),
-                'Activités_Détectées': ', '.join(safe_str(t) for t in entreprise.get('thematiques_principales', [])),
-            }
-            
-            # ✅ EXTRACTION DÉTAILLÉE SANS SCORES (suite du code existant...)
-            tous_extraits = []
-            tous_liens = []
-            resume_par_thematique = {}
-            
-            analyse = entreprise.get('analyse_thematique', {})
-            
-            for thematique in self.thematiques:
-                if thematique in analyse and analyse[thematique].get('trouve', False):
-                    result = analyse[thematique]
-                    
-                    # Informations détaillées par thématique
-                    infos_thematique = []
-                    liens_thematique = []
-                    
-                    for detail in result.get('details', []):
-                        info = detail.get('informations', {})
-                        
-                        # Extraits textuels des recherches web
-                        if 'extraits_textuels' in info:
-                            for extrait in info['extraits_textuels']:
-                                titre = safe_str(extrait.get('titre', ''))
-                                description = safe_str(extrait.get('description', ''))
-                                url = safe_str(extrait.get('url', ''))
-                                
-                                if titre and description:
-                                    info_complete = f"{titre}: {description}"
-                                    infos_thematique.append(info_complete)
-                                    tous_extraits.append(f"[{thematique}] {info_complete}")
-                                    
-                                    if url:
-                                        liens_thematique.append(url)
-                                        tous_liens.append(url)
-                    
-                    # Résumé pour cette thématique
-                    resume_par_thematique[thematique] = ' | '.join(infos_thematique[:2])
-                    
-                    # ✅ COLONNES PAR THÉMATIQUE SANS SCORES
-                    ligne[f'{thematique}_Détecté'] = 'Oui'
-                    ligne[f'{thematique}_Sources'] = ', '.join(safe_str(s) for s in result.get('sources', []))
-                    ligne[f'{thematique}_Détails'] = resume_par_thematique[thematique]
-                    ligne[f'{thematique}_Liens'] = ' | '.join(list(set(liens_thematique))[:2])
-                else:
-                    ligne[f'{thematique}_Détecté'] = 'Non'
-                    ligne[f'{thematique}_Sources'] = ''
-                    ligne[f'{thematique}_Détails'] = ''
-                    ligne[f'{thematique}_Liens'] = ''
-            
-            # ✅ COLONNES GLOBALES SANS SCORES
-            liens_uniques = list(set([lien for lien in tous_liens if lien and lien.startswith('http')]))
-            
-            ligne['Résumé_Complet'] = ' | '.join(tous_extraits[:5])
-            ligne['Nombre_Total_Informations'] = len(tous_extraits)
-            ligne['Liens_Sources_Principaux'] = ' | '.join(liens_uniques[:3])
-            ligne['Nombre_Sources_Uniques'] = len(liens_uniques)
-            ligne['Première_Source'] = liens_uniques[0] if liens_uniques else ''
-            ligne['Activité_Principale'] = self._determiner_activite_principale(resume_par_thematique)
-            
-            donnees.append(ligne)
-            
-        return pd.DataFrame(donnees)
-
-
-    # CORRECTION 4: Ajout d'une méthode utilitaire pour la conversion sécurisée
-
-    def safe_string_conversion(self, value):
-        """Conversion sécurisée de n'importe quelle valeur en string"""
-        if value is None:
-            return ''
-        elif isinstance(value, (int, float)):
-            return str(value)
-        elif isinstance(value, str):
-            return value.strip()
-        elif isinstance(value, (list, tuple)):
-            return ', '.join(str(item) for item in value)
-        elif isinstance(value, dict):
-            return json.dumps(value) if value else ''
-        else:
-            return str(value)
-
-
-    # INSTRUCTIONS D'INTÉGRATION:
-    """
-    1. Remplacez les méthodes correspondantes dans votre scripts/generateur_rapports.py
-    2. Ajoutez la méthode safe_string_conversion à la classe GenerateurRapports
-    3. Utilisez safe_string_conversion partout où vous manipulez des données qui pourraient être des int/float/autres types
-    4. Testez la génération HTML qui devrait maintenant fonctionner sans erreur
-    """
 
 
 
