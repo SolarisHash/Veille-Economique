@@ -445,7 +445,11 @@ class GenerateurRapports:
 
         
     def _generer_html_template_sans_scores(self, entreprises: List[Dict], stats: Dict) -> str:
-        """✅ Génération du template HTML SANS SCORES"""
+        """✅ Template HTML amélioré avec résumé IA, résumé par commune au début et graphique camembert"""
+        
+        # Génération du résumé IA de la page
+        resume_ia = self._generer_resume_ia_global(entreprises, stats)
+        
         html = f"""
         <!DOCTYPE html>
         <html lang="fr">
@@ -453,54 +457,167 @@ class GenerateurRapports:
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Rapport de Veille Économique</title>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
             <style>
-                body {{ font-family: Arial, sans-serif; margin: 20px; }}
-                .header {{ background-color: #2c3e50; color: white; padding: 20px; text-align: center; }}
-                .stats {{ display: flex; justify-content: space-around; margin: 20px 0; }}
-                .stat-box {{ background-color: #ecf0f1; padding: 15px; border-radius: 5px; text-align: center; }}
-                .thematique {{ margin: 20px 0; padding: 15px; border-left: 4px solid #3498db; }}
-                .entreprise {{ margin: 10px 0; padding: 10px; background-color: #f8f9fa; border-radius: 3px; }}
-                .activite {{ font-weight: bold; color: #27ae60; }}
-                .info-entreprise {{ color: #34495e; font-size: 0.9em; margin-top: 5px; }}
-                table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
-                th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
-                th {{ background-color: #f2f2f2; }}
+                body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }}
+                .container {{ max-width: 1200px; margin: 0 auto; background-color: white; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
+                .header {{ background: linear-gradient(135deg, #2c3e50, #3498db); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }}
+                .header h1 {{ margin: 0; font-size: 2.5em; font-weight: 300; }}
+                .header p {{ margin: 10px 0 0 0; opacity: 0.9; }}
+                
+                .resume-ia {{ background: linear-gradient(135deg, #e8f5e8, #f0f8f0); border-left: 5px solid #27ae60; margin: 20px; padding: 20px; border-radius: 8px; }}
+                .resume-ia h2 {{ color: #27ae60; margin-top: 0; display: flex; align-items: center; }}
+                .resume-ia h2::before {{ content: "🤖"; margin-right: 10px; }}
+                .resume-points {{ list-style: none; padding: 0; }}
+                .resume-points li {{ padding: 8px 0; border-bottom: 1px solid #e0e0e0; }}
+                .resume-points li:last-child {{ border-bottom: none; }}
+                .resume-points li::before {{ content: "▶"; color: #27ae60; margin-right: 10px; font-weight: bold; }}
+                
+                .stats {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px; }}
+                .stat-box {{ background: linear-gradient(135deg, #ecf0f1, #ffffff); padding: 20px; border-radius: 8px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
+                .stat-box h3 {{ margin: 0; font-size: 2em; color: #2c3e50; }}
+                .stat-box p {{ margin: 5px 0 0 0; color: #7f8c8d; font-weight: 500; }}
+                
+                .section {{ margin: 20px; }}
+                .section h2 {{ color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; display: flex; align-items: center; }}
+                .section h2::before {{ margin-right: 10px; font-size: 1.2em; }}
+                
+                .communes-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-top: 20px; }}
+                .commune-card {{ background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }}
+                .commune-card h4 {{ margin: 0 0 15px 0; color: #2c3e50; font-size: 1.3em; }}
+                .commune-stats {{ display: flex; justify-content: space-between; margin-bottom: 15px; }}
+                .commune-stat {{ text-align: center; }}
+                .commune-stat .number {{ font-size: 1.5em; font-weight: bold; color: #3498db; }}
+                .commune-stat .label {{ font-size: 0.9em; color: #7f8c8d; }}
+                
+                .chart-container {{ background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; margin: 20px 0; }}
+                .chart-wrapper {{ position: relative; height: 400px; }}
+                
+                .entreprise {{ margin: 20px 0; padding: 25px; background: white; border: 1px solid #e0e0e0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }}
+                .entreprise h4 {{ color: #2c3e50; margin: 0 0 15px 0; font-size: 1.4em; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; }}
+                .entreprise-info {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; background: #f8f9fa; padding: 15px; border-radius: 6px; }}
+                .info-item {{ display: flex; flex-direction: column; }}
+                .info-label {{ font-weight: bold; color: #34495e; font-size: 0.9em; }}
+                .info-value {{ color: #2c3e50; margin-top: 5px; }}
+                
+                .activites {{ margin: 15px 0; }}
+                .activites-list {{ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }}
+                .activite-tag {{ background: linear-gradient(135deg, #3498db, #2980b9); color: white; padding: 6px 12px; border-radius: 20px; font-size: 0.9em; font-weight: 500; }}
+                
+                .details-thematiques {{ margin-top: 25px; }}
+                .thematique-detail {{ margin: 15px 0; padding: 20px; background: #f8f9fa; border-left: 4px solid #3498db; border-radius: 0 6px 6px 0; }}
+                .thematique-detail h5 {{ color: #2c3e50; margin: 0 0 15px 0; font-size: 1.1em; }}
+                .detail-item {{ margin: 10px 0; padding: 12px; background: white; border-radius: 6px; border: 1px solid #e9ecef; }}
+                .detail-title {{ font-weight: bold; color: #34495e; margin-bottom: 8px; }}
+                .detail-content {{ color: #2c3e50; line-height: 1.5; }}
+                .detail-source {{ margin-top: 8px; }}
+                .detail-source a {{ color: #3498db; text-decoration: none; font-size: 0.9em; }}
+                .detail-source a:hover {{ text-decoration: underline; }}
             </style>
         </head>
         <body>
-            <div class="header">
-                <h1>🏢 Rapport de Veille Économique Territoriale</h1>
-                <p>Généré le {datetime.now().strftime('%d/%m/%Y à %H:%M')}</p>
+            <div class="container">
+                <div class="header">
+                    <h1>🏢 Rapport de Veille Économique Territoriale</h1>
+                    <p>Généré le {datetime.now().strftime('%d/%m/%Y à %H:%M')}</p>
+                </div>
+                
+                <!-- NOUVEAU: Résumé IA Global -->
+                <div class="resume-ia">
+                    <h2>Résumé Intelligent de l'Analyse</h2>
+                    {resume_ia}
+                </div>
+                
+                <div class="stats">
+                    <div class="stat-box">
+                        <h3>{stats['nb_total']}</h3>
+                        <p>Entreprises analysées</p>
+                    </div>
+                    <div class="stat-box">
+                        <h3>{stats['nb_actives']}</h3>
+                        <p>Entreprises avec activité</p>
+                    </div>
+                    <div class="stat-box">
+                        <h3>{stats['pourcentage_actives']}%</h3>
+                        <p>Taux d'activité détectée</p>
+                    </div>
+                    <div class="stat-box">
+                        <h3>{stats['nb_communes']}</h3>
+                        <p>Communes représentées</p>
+                    </div>
+                </div>
+                
+                <!-- NOUVEAU: Résumé par commune AU DÉBUT -->
+                <div class="section">
+                    <h2>🏘️ Résumé par Commune</h2>
+                    {self._generer_section_communes_sans_scores(entreprises)}
+                </div>
+                
+                <!-- MODIFIÉ: Synthèse par thématique avec graphique -->
+                <div class="section">
+                    <h2>📊 Synthèse par Thématique</h2>
+                    <div class="chart-container">
+                        <h3 style="text-align: center; margin-bottom: 20px;">Répartition des Activités par Thématique</h3>
+                        <div class="chart-wrapper">
+                            <canvas id="thematiquesChart"></canvas>
+                        </div>
+                    </div>
+                    {self._generer_section_thematiques_detaillee_sans_scores(entreprises, stats)}
+                </div>
+                
+                <!-- Détail des entreprises (existant, gardé à la fin) -->
+                <div class="section">
+                    <h2>📋 Détail des Entreprises</h2>
+                    {self._generer_section_entreprises_sans_scores(entreprises)}
+                </div>
             </div>
             
-            <div class="stats">
-                <div class="stat-box">
-                    <h3>{stats['nb_total']}</h3>
-                    <p>Entreprises analysées</p>
-                </div>
-                <div class="stat-box">
-                    <h3>{stats['nb_actives']}</h3>
-                    <p>Entreprises avec activité</p>
-                </div>
-                <div class="stat-box">
-                    <h3>{stats['pourcentage_actives']}%</h3>
-                    <p>Taux d'activité détectée</p>
-                </div>
-                <div class="stat-box">
-                    <h3>{stats['nb_communes']}</h3>
-                    <p>Communes représentées</p>
-                </div>
-            </div>
-            
-            <h2>📊 Synthèse par Thématique</h2>
-            {self._generer_section_thematiques_sans_scores(entreprises, stats)}
-            
-            <h2>🏘️ Résumé par Commune</h2>
-            {self._generer_section_communes_sans_scores(entreprises)}
-            
-            <h2>📋 Détail des Entreprises</h2>
-            {self._generer_section_entreprises_sans_scores(entreprises)}
-            
+            <!-- Script pour le graphique camembert -->
+            <script>
+                const ctx = document.getElementById('thematiquesChart').getContext('2d');
+                const thematiquesData = {json.dumps(self._generer_donnees_camembert(stats))};
+                
+                new Chart(ctx, {{
+                    type: 'doughnut',
+                    data: {{
+                        labels: thematiquesData.labels,
+                        datasets: [{{
+                            data: thematiquesData.values,
+                            backgroundColor: [
+                                '#3498db', '#e74c3c', '#2ecc71', '#f39c12', 
+                                '#9b59b6', '#1abc9c', '#34495e', '#e67e22'
+                            ],
+                            borderWidth: 2,
+                            borderColor: '#ffffff'
+                        }}]
+                    }},
+                    options: {{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {{
+                            legend: {{
+                                position: 'right',
+                                labels: {{
+                                    usePointStyle: true,
+                                    padding: 20,
+                                    font: {{
+                                        size: 14
+                                    }}
+                                }}
+                            }},
+                            tooltip: {{
+                                callbacks: {{
+                                    label: function(context) {{
+                                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                        const percentage = ((context.parsed * 100) / total).toFixed(1);
+                                        return context.label + ': ' + context.parsed + ' entreprises (' + percentage + '%)';
+                                    }}
+                                }}
+                            }}
+                        }}
+                    }}
+                }});
+            </script>
         </body>
         </html>
         """
@@ -1063,20 +1180,20 @@ class GenerateurRapports:
         return rapports
     
     # --- AJOUT UTILITAIRES SIREN/SIRET ---
-    def _key_siren(ent):
+    def _key_siren(self, ent):
         return (ent.get('siren') or '').strip()
 
-    def group_by_siren(entreprises):
+    def group_by_siren(self, entreprises):
         """Retourne dict {siren: [entreprises (établissements)]} en ignorant siren vide."""
         from collections import defaultdict
         g = defaultdict(list)
         for e in entreprises:
-            siren = _key_siren(e)
+            siren = self._key_siren(e)
             if siren:
                 g[siren].append(e)
         return g
 
-    def entreprise_label_unite_legale(siren, etablissements):
+    def entreprise_label_unite_legale(self, siren, etablissements):
         """Libellé 'Entreprise (SIREN) - Nom principal', agrège le 'meilleur' nom."""
         noms = [e.get('nom') or e.get('enseigne') or '' for e in etablissements]
         nom = max(noms, key=len) if noms else f"SIREN {siren}"
