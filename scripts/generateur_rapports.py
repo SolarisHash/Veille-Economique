@@ -15,9 +15,6 @@ from pathlib import Path
 
 from scipy import stats
 
-from report_fixer import ReportFixer
-
-
 class GenerateurRapports:
     """Générateur de rapports multi-format pour la veille économique"""
     
@@ -1207,17 +1204,12 @@ class GenerateurRapports:
         """Génération de tous les rapports avec gestion d'erreurs individuelles"""
         print("📊 Génération de tous les rapports")
         
-        fixer = ReportFixer()
-        entreprises_uniques = fixer.deduplicate_enterprises(entreprises_enrichies)
-        entreprises_corrigees = fixer.validate_and_fix_urls(entreprises_uniques)
-        
         rapports = {}
         
         # 1. Rapport Excel (prioritaire) - AVEC SCORES
         try:
             print("📊 Génération rapport Excel...")
-            # rapports['excel'] = self.generer_rapport_excel(entreprises_enrichies)
-            rapports['excel'] = self.generer_rapport_excel(entreprises_corrigees) 
+            rapports['excel'] = self.generer_rapport_excel(entreprises_enrichies)
         except Exception as e:
             print(f"❌ Erreur rapport Excel: {str(e)}")
             rapports['excel'] = f"ERREUR: {str(e)}"
@@ -1225,9 +1217,7 @@ class GenerateurRapports:
         # 2. Rapport HTML - ✅ SANS SCORES
         try:
             print("🌐 Génération rapport HTML (sans scores)...")
-            # rapports['html'] = self.generer_rapport_html(entreprises_enrichies)
-            rapports['html'] = self.generer_rapport_html(entreprises_corrigees)    # ← Et ici
-
+            rapports['html'] = self.generer_rapport_html(entreprises_enrichies)
         except Exception as e:
             print(f"❌ Erreur rapport HTML: {str(e)}")
             rapports['html'] = f"ERREUR: {str(e)}"

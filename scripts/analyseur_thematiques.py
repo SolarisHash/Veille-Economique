@@ -11,9 +11,6 @@ import json
 import yaml
 from collections import defaultdict, Counter
 
-from ai_content_validator import AIContentValidator
-
-
 class AnalyseurThematiques:
     """Analyseur thématique pour classifier les informations trouvées"""
     
@@ -59,6 +56,7 @@ class AnalyseurThematiques:
                 'soutien', 'dons', 'charitable', 'solidarité', 'engagement social'
             ]
         }
+<<<<<<< HEAD
         
         self.content_validator = AIContentValidator()
         
@@ -78,6 +76,9 @@ class AnalyseurThematiques:
         import re
         return any(re.search(pat, txt) for pat in self.EXTRACT_FILTER_PATTERNS)
     
+=======
+            
+>>>>>>> parent of d0b41f2 (Correction)
     def _charger_config_mots_cles(self) -> Dict:
         """Chargement de la configuration des mots-clés"""
         try:
@@ -967,6 +968,7 @@ class AnalyseurThematiques:
 
             try:
                 donnees_thematiques = resultat.get('donnees_thematiques', {})
+<<<<<<< HEAD
                 donnees_thematiques_originales = donnees_thematiques
 
                 # 🔎 Validation IA anti-faux positifs avec fallback sécurisé
@@ -993,6 +995,9 @@ class AnalyseurThematiques:
                         print(f"    ⚠️ Validation IA échouée: {e} → fallback données originales")
                         donnees_thematiques = donnees_thematiques_originales
 
+=======
+                
+>>>>>>> parent of d0b41f2 (Correction)
                 if not donnees_thematiques:
                     print("    ⚠️ Aucune donnée thématique")
                     entreprise_base = resultat.get('entreprise', {}).copy()
