@@ -59,7 +59,7 @@ class ExtracteurDonnees:
                     # Normalisation des apostrophes pour comparaison
                     col_manquante_norm = col_manquante.replace('ʼ', "'").replace(''', "'").replace('`', "'")
                     col_presente_norm = col_presente.replace('ʼ', "'").replace(''', "'").replace('`', "'")
-                    if col_manquante_norm == col_presente_norm:
+                    if col_manquante_norm == col_presente_norm: # type: ignore
                         colonnes_mappees[col_manquante] = col_presente
                         print(f"✅ Mapping trouvé: '{col_manquante}' -> '{col_presente}'")
     
