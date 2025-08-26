@@ -5,15 +5,12 @@ Module de génération de rapports pour la veille économique
 Version modifiée pour le rapport HTML sans scores
 """
 
-from pydoc import html
 import pandas as pd
 import json
 from datetime import datetime
 from typing import Dict, List, Optional
 import os
 from pathlib import Path
-
-from scipy import stats
 
 class GenerateurRapports:
     """Générateur de rapports multi-format pour la veille économique"""
@@ -448,11 +445,7 @@ class GenerateurRapports:
 
         
     def _generer_html_template_sans_scores(self, entreprises: List[Dict], stats: Dict) -> str:
-        """✅ Template HTML amélioré avec résumé IA, résumé par commune au début et graphique camembert"""
-        
-        # Génération du résumé IA de la page
-        resume_ia = self._generer_resume_ia_global(entreprises, stats)
-        
+        """✅ Génération du template HTML SANS SCORES"""
         html = f"""
         <!DOCTYPE html>
         <html lang="fr">
@@ -460,167 +453,54 @@ class GenerateurRapports:
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Rapport de Veille Économique</title>
-            <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
             <style>
-                body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }}
-                .container {{ max-width: 1200px; margin: 0 auto; background-color: white; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
-                .header {{ background: linear-gradient(135deg, #2c3e50, #3498db); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }}
-                .header h1 {{ margin: 0; font-size: 2.5em; font-weight: 300; }}
-                .header p {{ margin: 10px 0 0 0; opacity: 0.9; }}
-                
-                .resume-ia {{ background: linear-gradient(135deg, #e8f5e8, #f0f8f0); border-left: 5px solid #27ae60; margin: 20px; padding: 20px; border-radius: 8px; }}
-                .resume-ia h2 {{ color: #27ae60; margin-top: 0; display: flex; align-items: center; }}
-                .resume-ia h2::before {{ content: "🤖"; margin-right: 10px; }}
-                .resume-points {{ list-style: none; padding: 0; }}
-                .resume-points li {{ padding: 8px 0; border-bottom: 1px solid #e0e0e0; }}
-                .resume-points li:last-child {{ border-bottom: none; }}
-                .resume-points li::before {{ content: "▶"; color: #27ae60; margin-right: 10px; font-weight: bold; }}
-                
-                .stats {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px; }}
-                .stat-box {{ background: linear-gradient(135deg, #ecf0f1, #ffffff); padding: 20px; border-radius: 8px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
-                .stat-box h3 {{ margin: 0; font-size: 2em; color: #2c3e50; }}
-                .stat-box p {{ margin: 5px 0 0 0; color: #7f8c8d; font-weight: 500; }}
-                
-                .section {{ margin: 20px; }}
-                .section h2 {{ color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; display: flex; align-items: center; }}
-                .section h2::before {{ margin-right: 10px; font-size: 1.2em; }}
-                
-                .communes-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-top: 20px; }}
-                .commune-card {{ background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }}
-                .commune-card h4 {{ margin: 0 0 15px 0; color: #2c3e50; font-size: 1.3em; }}
-                .commune-stats {{ display: flex; justify-content: space-between; margin-bottom: 15px; }}
-                .commune-stat {{ text-align: center; }}
-                .commune-stat .number {{ font-size: 1.5em; font-weight: bold; color: #3498db; }}
-                .commune-stat .label {{ font-size: 0.9em; color: #7f8c8d; }}
-                
-                .chart-container {{ background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; margin: 20px 0; }}
-                .chart-wrapper {{ position: relative; height: 400px; }}
-                
-                .entreprise {{ margin: 20px 0; padding: 25px; background: white; border: 1px solid #e0e0e0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }}
-                .entreprise h4 {{ color: #2c3e50; margin: 0 0 15px 0; font-size: 1.4em; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; }}
-                .entreprise-info {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; background: #f8f9fa; padding: 15px; border-radius: 6px; }}
-                .info-item {{ display: flex; flex-direction: column; }}
-                .info-label {{ font-weight: bold; color: #34495e; font-size: 0.9em; }}
-                .info-value {{ color: #2c3e50; margin-top: 5px; }}
-                
-                .activites {{ margin: 15px 0; }}
-                .activites-list {{ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }}
-                .activite-tag {{ background: linear-gradient(135deg, #3498db, #2980b9); color: white; padding: 6px 12px; border-radius: 20px; font-size: 0.9em; font-weight: 500; }}
-                
-                .details-thematiques {{ margin-top: 25px; }}
-                .thematique-detail {{ margin: 15px 0; padding: 20px; background: #f8f9fa; border-left: 4px solid #3498db; border-radius: 0 6px 6px 0; }}
-                .thematique-detail h5 {{ color: #2c3e50; margin: 0 0 15px 0; font-size: 1.1em; }}
-                .detail-item {{ margin: 10px 0; padding: 12px; background: white; border-radius: 6px; border: 1px solid #e9ecef; }}
-                .detail-title {{ font-weight: bold; color: #34495e; margin-bottom: 8px; }}
-                .detail-content {{ color: #2c3e50; line-height: 1.5; }}
-                .detail-source {{ margin-top: 8px; }}
-                .detail-source a {{ color: #3498db; text-decoration: none; font-size: 0.9em; }}
-                .detail-source a:hover {{ text-decoration: underline; }}
+                body {{ font-family: Arial, sans-serif; margin: 20px; }}
+                .header {{ background-color: #2c3e50; color: white; padding: 20px; text-align: center; }}
+                .stats {{ display: flex; justify-content: space-around; margin: 20px 0; }}
+                .stat-box {{ background-color: #ecf0f1; padding: 15px; border-radius: 5px; text-align: center; }}
+                .thematique {{ margin: 20px 0; padding: 15px; border-left: 4px solid #3498db; }}
+                .entreprise {{ margin: 10px 0; padding: 10px; background-color: #f8f9fa; border-radius: 3px; }}
+                .activite {{ font-weight: bold; color: #27ae60; }}
+                .info-entreprise {{ color: #34495e; font-size: 0.9em; margin-top: 5px; }}
+                table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
+                th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+                th {{ background-color: #f2f2f2; }}
             </style>
         </head>
         <body>
-            <div class="container">
-                <div class="header">
-                    <h1>🏢 Rapport de Veille Économique Territoriale</h1>
-                    <p>Généré le {datetime.now().strftime('%d/%m/%Y à %H:%M')}</p>
+            <div class="header">
+                <h1>🏢 Rapport de Veille Économique Territoriale</h1>
+                <p>Généré le {datetime.now().strftime('%d/%m/%Y à %H:%M')}</p>
+            </div>
+            
+            <div class="stats">
+                <div class="stat-box">
+                    <h3>{stats['nb_total']}</h3>
+                    <p>Entreprises analysées</p>
                 </div>
-                
-                <!-- NOUVEAU: Résumé IA Global -->
-                <div class="resume-ia">
-                    <h2>Résumé Intelligent de l'Analyse</h2>
-                    {resume_ia}
+                <div class="stat-box">
+                    <h3>{stats['nb_actives']}</h3>
+                    <p>Entreprises avec activité</p>
                 </div>
-                
-                <div class="stats">
-                    <div class="stat-box">
-                        <h3>{stats['nb_total']}</h3>
-                        <p>Entreprises analysées</p>
-                    </div>
-                    <div class="stat-box">
-                        <h3>{stats['nb_actives']}</h3>
-                        <p>Entreprises avec activité</p>
-                    </div>
-                    <div class="stat-box">
-                        <h3>{stats['pourcentage_actives']}%</h3>
-                        <p>Taux d'activité détectée</p>
-                    </div>
-                    <div class="stat-box">
-                        <h3>{stats['nb_communes']}</h3>
-                        <p>Communes représentées</p>
-                    </div>
+                <div class="stat-box">
+                    <h3>{stats['pourcentage_actives']}%</h3>
+                    <p>Taux d'activité détectée</p>
                 </div>
-                
-                <!-- NOUVEAU: Résumé par commune AU DÉBUT -->
-                <div class="section">
-                    <h2>🏘️ Résumé par Commune</h2>
-                    {self._generer_section_communes_sans_scores(entreprises)}
-                </div>
-                
-                <!-- MODIFIÉ: Synthèse par thématique avec graphique -->
-                <div class="section">
-                    <h2>📊 Synthèse par Thématique</h2>
-                    <div class="chart-container">
-                        <h3 style="text-align: center; margin-bottom: 20px;">Répartition des Activités par Thématique</h3>
-                        <div class="chart-wrapper">
-                            <canvas id="thematiquesChart"></canvas>
-                        </div>
-                    </div>
-                    {self._generer_section_thematiques_detaillee_sans_scores(entreprises, stats)}
-                </div>
-                
-                <!-- Détail des entreprises (existant, gardé à la fin) -->
-                <div class="section">
-                    <h2>📋 Détail des Entreprises</h2>
-                    {self._generer_section_entreprises_sans_scores(entreprises)}
+                <div class="stat-box">
+                    <h3>{stats['nb_communes']}</h3>
+                    <p>Communes représentées</p>
                 </div>
             </div>
             
-            <!-- Script pour le graphique camembert -->
-            <script>
-                const ctx = document.getElementById('thematiquesChart').getContext('2d');
-                const thematiquesData = {json.dumps(self._generer_donnees_camembert(stats))};
-                
-                new Chart(ctx, {{
-                    type: 'doughnut',
-                    data: {{
-                        labels: thematiquesData.labels,
-                        datasets: [{{
-                            data: thematiquesData.values,
-                            backgroundColor: [
-                                '#3498db', '#e74c3c', '#2ecc71', '#f39c12', 
-                                '#9b59b6', '#1abc9c', '#34495e', '#e67e22'
-                            ],
-                            borderWidth: 2,
-                            borderColor: '#ffffff'
-                        }}]
-                    }},
-                    options: {{
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {{
-                            legend: {{
-                                position: 'right',
-                                labels: {{
-                                    usePointStyle: true,
-                                    padding: 20,
-                                    font: {{
-                                        size: 14
-                                    }}
-                                }}
-                            }},
-                            tooltip: {{
-                                callbacks: {{
-                                    label: function(context) {{
-                                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                        const percentage = ((context.parsed * 100) / total).toFixed(1);
-                                        return context.label + ': ' + context.parsed + ' entreprises (' + percentage + '%)';
-                                    }}
-                                }}
-                            }}
-                        }}
-                    }}
-                }});
-            </script>
+            <h2>📊 Synthèse par Thématique</h2>
+            {self._generer_section_thematiques_sans_scores(entreprises, stats)}
+            
+            <h2>🏘️ Résumé par Commune</h2>
+            {self._generer_section_communes_sans_scores(entreprises)}
+            
+            <h2>📋 Détail des Entreprises</h2>
+            {self._generer_section_entreprises_sans_scores(entreprises)}
+            
         </body>
         </html>
         """
@@ -711,62 +591,45 @@ class GenerateurRapports:
         }
 
     def _generer_section_thematiques_detaillee_sans_scores(self, entreprises: List[Dict], stats: Dict) -> str:
-        """Génère une section thématiques détaillée sous le graphique, en comptant
-        des entreprises uniques par (SIRET si présent, sinon (nom, commune)),
-        et en affichant des noms sans doublons."""
+        """Génère une section thématiques détaillée sous le graphique"""
+        
         html = '<div style="margin-top: 30px;">'
-
-        def cle_entreprise(e: Dict):
-            siret = (e.get('siret') or '').strip()
-            if siret:
-                return ('SIRET', siret)
-            return ('NOMCOMMUNE', (e.get('nom') or '').strip().lower(), (e.get('commune') or '').strip().lower())
-
+        
         thematiques_stats = stats.get('thematiques_stats', {})
-        thematiques_triees = sorted(thematiques_stats.items(), key=lambda x: x[1]['count'], reverse=True)
-
+        thematiques_triees = sorted(
+            thematiques_stats.items(), 
+            key=lambda x: x[1]['count'], 
+            reverse=True
+        )
+        
         for thematique, data in thematiques_triees:
-            if data['count'] <= 0:
-                continue
-
-            # Uniques par clé
-            uniques = {}
-            for e in entreprises:
-                if e.get('analyse_thematique', {}).get(thematique, {}).get('trouve', False):
-                    uniques[cle_entreprise(e)] = e
-            entreprises_uniques = list(uniques.values())
-
-            # Top 3 visuels (ordre alpha par nom)
-            top = sorted(entreprises_uniques, key=lambda x: (x.get('nom') or '').lower())[:3]
-
-            html += f'''
-            <div style="margin: 20px 0; padding: 20px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #3498db;">
-                <h4 style="margin: 0 0 15px 0; color: #2c3e50;">
-                    {thematique.replace('_', ' ').title()}
-                    <span style="color: #7f8c8d; font-weight: normal;">({len(entreprises_uniques)} entreprises uniques)</span>
-                </h4>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
-            '''
-
-            deja_vus = set()
-            for e in top:
-                nom = (e.get('nom') or '').strip()
-                if nom.lower() in deja_vus:
-                    continue
-                deja_vus.add(nom.lower())
-
+            if data['count'] > 0:
+                entreprises_thematique = [
+                    e for e in entreprises 
+                    if e.get('analyse_thematique', {}).get(thematique, {}).get('trouve', False)
+                ][:3]  # Top 3
+                
                 html += f'''
-                <div style="background: white; padding: 15px; border-radius: 6px; border: 1px solid #e9ecef;">
-                    <div style="font-weight: bold; color: #2c3e50;">{nom}</div>
-                    <div style="color: #7f8c8d; font-size: 0.9em; margin-top: 5px;">{e.get('commune') or ''}</div>
-                </div>
+                <div style="margin: 20px 0; padding: 20px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #3498db;">
+                    <h4 style="margin: 0 0 15px 0; color: #2c3e50;">
+                        {thematique.replace('_', ' ').title()} 
+                        <span style="color: #7f8c8d; font-weight: normal;">({data['count']} entreprises)</span>
+                    </h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
                 '''
-
-            html += '</div></div>'
-
+                
+                for entreprise in entreprises_thematique:
+                    html += f'''
+                    <div style="background: white; padding: 15px; border-radius: 6px; border: 1px solid #e9ecef;">
+                        <div style="font-weight: bold; color: #2c3e50;">{entreprise['nom']}</div>
+                        <div style="color: #7f8c8d; font-size: 0.9em; margin-top: 5px;">{entreprise['commune']}</div>
+                    </div>
+                    '''
+                
+                html += '</div></div>'
+        
         html += '</div>'
         return html
-
         
     def _generer_section_thematiques_sans_scores(self, entreprises: List[Dict], stats: Dict) -> str:
         """✅ Génération de la section thématiques SANS SCORES"""
@@ -815,104 +678,54 @@ class GenerateurRapports:
         return html
         
     def _generer_section_communes_sans_scores(self, entreprises: List[Dict]) -> str:
-        """
-        Section communes (SANS SCORES) — robuste aux types (commune/nom/secteur parfois non-str),
-        déduplication par SIREN (fallback SIRET puis (nom, commune)), et listes sans doublon.
-        """
-
-        # 0) Normalisation stricte des champs utilisés (évite 'int'.strip)
-        entreprises_norm = []
-        for e in entreprises:
-            e2 = dict(e)  # shallow copy
-
-            # Champs stringifiés
-            for k in ("commune", "nom", "secteur_naf", "siret", "siren"):
-                v = e2.get(k, "")
-                e2[k] = "" if v is None else str(v)
-
-            # Analyse thématique toujours présente (dict) pour any(...)
-            e2["analyse_thematique"] = e2.get("analyse_thematique") or {}
-
-            entreprises_norm.append(e2)
-        entreprises = entreprises_norm
-
-        # 1) Filtrage "actives" = au moins une thématique trouvée (plus robuste que score)
-        def est_active(ent: Dict) -> bool:
-            at = ent.get("analyse_thematique", {})
-            try:
-                return any(bool(v.get("trouve")) for v in at.values())
-            except Exception:
-                return False
-
-        entreprises_actives = [e for e in entreprises if est_active(e)]
-
-        # 2) Déduplication par entité économique
-        #    Clé d'unicité : SIREN (prioritaire) -> SIRET -> (nom_normalisé, commune_normalisée)
-        def cle_entite(e: Dict):
-            siren = e.get("siren", "").strip()
-            if siren:
-                return ("SIREN", siren)
-            siret = e.get("siret", "").strip()
-            if siret:
-                return ("SIRET", siret)
-            nom = e.get("nom", "").strip().lower()
-            com = e.get("commune", "").strip().lower()
-            return ("NOMCOMMUNE", nom, com)
-
-        uniques = {}
-        for e in entreprises_actives:
-            uniques[cle_entite(e)] = e  # overwrite safe
-
-        # 3) Regroupement par commune (string sécurisée)
-        communes_data: Dict[str, Dict] = {}
-        for e in uniques.values():
-            commune = e.get("commune", "").strip()
-            if not commune:
-                commune = "Inconnue"
-
+        """✅ Section communes améliorée avec cartes visuelles"""
+        communes_data = {}
+        
+        # Seulement les entreprises avec activité
+        entreprises_actives = [e for e in entreprises if e.get('score_global', 0) > 0.1]
+        
+        for entreprise in entreprises_actives:
+            commune = entreprise.get('commune', 'Inconnue')
             if commune not in communes_data:
                 communes_data[commune] = {
-                    "entreprises": [],
-                    "thematiques": set(),
-                    "secteurs": set(),
+                    'entreprises': [],
+                    'thematiques': set(),
+                    'secteurs': set()
                 }
-            communes_data[commune]["entreprises"].append(e)
-
-            # Thématiques principales (si présentes)
-            for th in (e.get("thematiques_principales") or []):
-                communes_data[commune]["thematiques"].add(str(th))
-
-            # Secteur simplifié = 1er token du NAF si dispo
-            secteur = e.get("secteur_naf", "").strip()
+            
+            communes_data[commune]['entreprises'].append(entreprise)
+            
+            # Collecte des thématiques
+            thematiques_entreprise = entreprise.get('thematiques_principales', [])
+            communes_data[commune]['thematiques'].update(thematiques_entreprise)
+            
+            # Collecte des secteurs (simplifié)
+            secteur = entreprise.get('secteur_naf', '')
             if secteur:
-                communes_data[commune]["secteurs"].add(secteur.split()[0])
-
-        # 4) Tri des communes par nb d’entreprises actives
-        communes_triees = sorted(communes_data.items(), key=lambda x: len(x[1]["entreprises"]), reverse=True)
-
-        # 5) Rendu HTML (noms d’entreprises sans doublon)
-        if not communes_triees:
-            return '<div style="text-align: center; padding: 40px; color: #7f8c8d;">Aucune commune avec activité détectée</div>'
-
+                secteur_simplifie = secteur.split()[0] if secteur else 'Autre'
+                communes_data[commune]['secteurs'].add(secteur_simplifie)
+        
+        # Tri des communes par nombre d'entreprises actives
+        communes_triees = sorted(communes_data.items(), key=lambda x: len(x[1]['entreprises']), reverse=True)
+        
         html = '<div class="communes-grid">'
-
+        
         for commune, data in communes_triees:
-            nb_entreprises = len(data["entreprises"])
-            nb_thematiques = len(data["thematiques"])
-            nb_secteurs = len(data["secteurs"])
-
-            # Noms uniques et triés pour lisibilité
-            noms_uniques = sorted({(e.get("nom") or "").strip() for e in data["entreprises"] if (e.get("nom") or "").strip()})
-            exemples = noms_uniques[:3]
-
-            # Thématiques principales (formatées)
-            thematiques_liste = list(data["thematiques"])[:3]
-            thematiques_affichage = ", ".join(t.replace("_", " ").title() for t in thematiques_liste)
-
+            nb_entreprises = len(data['entreprises'])
+            nb_thematiques = len(data['thematiques'])
+            nb_secteurs = len(data['secteurs'])
+            
+            # Entreprises exemple (top 3)
+            entreprises_exemple = [e['nom'] for e in data['entreprises'][:3]]
+            
+            # Thématiques principales
+            thematiques_liste = list(data['thematiques'])[:3]
+            thematiques_affichage = ', '.join([t.replace('_', ' ').title() for t in thematiques_liste])
+            
             html += f'''
             <div class="commune-card">
                 <h4>📍 {commune}</h4>
-
+                
                 <div class="commune-stats">
                     <div class="commune-stat">
                         <div class="number">{nb_entreprises}</div>
@@ -927,27 +740,32 @@ class GenerateurRapports:
                         <div class="label">Secteurs</div>
                     </div>
                 </div>
-
+                
                 <div style="margin-bottom: 15px;">
                     <div style="font-weight: bold; color: #34495e; margin-bottom: 8px;">🏢 Entreprises actives :</div>
                     <div style="font-size: 0.9em; color: #2c3e50; line-height: 1.4;">
-                        {", ".join(exemples)}{' et ' + str(nb_entreprises - 3) + ' autres...' if nb_entreprises > 3 else ''}
+                        {', '.join(entreprises_exemple)}
+                        {f' et {nb_entreprises - 3} autres...' if nb_entreprises > 3 else ''}
                     </div>
                 </div>
-
-                {f"""
+                
+                {f'''
                 <div>
                     <div style="font-weight: bold; color: #34495e; margin-bottom: 8px;">🎯 Activités principales :</div>
-                    <div style="font-size: 0.9em; color: #2c3e50;">{thematiques_affichage}</div>
+                    <div style="font-size: 0.9em; color: #2c3e50;">
+                        {thematiques_affichage}
+                    </div>
                 </div>
-                """ if thematiques_affichage else ""}
+                ''' if thematiques_affichage else ''}
             </div>
             '''
-
-        html += "</div>"
+        
+        html += '</div>'
+        
+        if not communes_triees:
+            html = '<div style="text-align: center; padding: 40px; color: #7f8c8d;">Aucune commune avec activité détectée</div>'
+        
         return html
-
-
 
     def _generer_section_entreprises_sans_scores(self, entreprises: List[Dict]) -> str:
         """✅ Section entreprises HTML SANS SCORES - Seulement les actives"""
