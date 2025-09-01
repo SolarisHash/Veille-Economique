@@ -227,52 +227,19 @@ class DataQualityFixer:
         return extraits_ameliores
     
     def _valider_extraits_finaux(self, extraits: List[Dict], entreprise: Dict) -> List[Dict]:
-        """Validation finale avant passage à l'IA"""
+        """Validation ultra-permissive pour PME"""
         extraits_valides = []
         
-        nom_entreprise = entreprise.get('nom', '').lower()
-        
         for extrait in extraits:
-            # Critères de validation finale
-            est_valide = True
-            raisons_rejet = []
-            
-            # 1. Contenu minimal requis
+            # Critères PME ultra-permissifs
             titre = extrait.get('titre', '')
             description = extrait.get('description', '')
             
-            if len(titre) < 3 and len(description) < 10:
-                est_valide = False
-                raisons_rejet.append("Contenu insuffisant")
-            
-            # 2. Pertinence entreprise (seuil bas mais présent)
-            texte_complet = f"{titre} {description}".lower()
-            
-            # Recherche du nom d'entreprise ou mots-clés associés
-            mots_entreprise = nom_entreprise.split()
-            mots_trouves = [mot for mot in mots_entreprise if len(mot) > 2 and mot in texte_complet]
-            
-            # Seuil très permissif : au moins 1 mot significatif de l'entreprise
-            if len(mots_trouves) == 0 and not extrait.get('contexte_ajoute'):
-                # Exception : si c'est un résultat thématique générique mais de qualité
-                if extrait.get('qualite_score', 0) < 0.3:
-                    est_valide = False
-                    raisons_rejet.append("Aucun lien avec l'entreprise détecté")
-            
-            # 3. URL minimalement valide (optionnel)
-            url = extrait.get('url', '')
-            if url and not (url.startswith('http') or url.startswith('www')):
-                # URL invalide mais pas rédhibitoire
-                extrait['url_invalide'] = True
-            
-            if est_valide:
-                # Ajout métadonnées finales
+            # Si au moins 5 caractères de contenu → VALIDER
+            if len(titre) + len(description) >= 5:
                 extrait['validation_finale'] = True
-                extrait['pertinence_entreprise'] = len(mots_trouves) / max(len(mots_entreprise), 1)
+                extrait['validation_pme_permissive'] = True
                 extraits_valides.append(extrait)
-            else:
-                extrait['rejete_final'] = True
-                extrait['raisons_rejet_final'] = raisons_rejet
         
         return extraits_valides
     

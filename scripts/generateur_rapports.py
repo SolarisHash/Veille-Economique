@@ -58,10 +58,30 @@ class GenerateurRapports:
         return str(chemin_fichier)
         
     def _creer_dataframe_principal(self, entreprises: List[Dict]) -> pd.DataFrame:
-        """Version SANS SCORES - Focus sur les entreprises actives uniquement"""
-        donnees = []
+        """Version ULTRA-PERMISSIVE pour PME"""
+        
+        # ✅ INCLURE TOUTES les entreprises ayant AU MOINS 1 extrait
+        entreprises_avec_donnees = []
         
         for entreprise in entreprises:
+            analyse = entreprise.get('analyse_thematique', {})
+            
+            # Vérifier s'il y a AU MOINS 1 extrait dans n'importe quelle thématique
+            a_des_extraits = False
+            for thematique, data in analyse.items():
+                if data.get('details', []):
+                    a_des_extraits = True
+                    break
+            
+            if a_des_extraits:
+                entreprises_avec_donnees.append(entreprise)
+        
+        print(f"📊 PME avec données: {len(entreprises_avec_donnees)}/{len(entreprises)}")
+        
+        # Traiter ces entreprises...
+        donnees = []
+        
+        for entreprise in entreprises_avec_donnees:
             # ✅ FILTRAGE : Seulement les entreprises avec activité
             if entreprise.get('score_global', 0) <= 0.1:
                 continue  # Skip les entreprises sans activité

@@ -224,7 +224,7 @@ def main_pme_territorial():
     
     # Configuration
     fichier_excel = "data/input/entreprises_base.xlsx"
-    nb_entreprises = 25
+    nb_entreprises = 15
     
     # Vérification fichier source
     if not os.path.exists(fichier_excel):
@@ -332,21 +332,64 @@ def main_pme_territorial():
                     donnees_thematiques
                 )
         
-        # ✅ ÉTAPE 3: Analyse avec seuils PME
-        print(f"\n🔬 ÉTAPE 3/5 - ANALYSE THÉMATIQUE PME")
+        # ✅ ÉTAPE 3: Analyse avec seuils PME + VALIDATION IA
+        print(f"\n🔬 ÉTAPE 3/5 - ANALYSE THÉMATIQUE PME + VALIDATION IA")
         print("-" * 50)
         
         thematiques = ['recrutements', 'evenements', 'innovations', 'vie_entreprise']
         analyseur = AnalyseurThematiques(thematiques)
-
-        # Intégration du module IA de validation
-        ai_module = AIValidationModule()
-        ai_module.integrate_with_existing_analyzer(analyseur)
+        
+        # ✅ VALIDATION IA AVANT L'ANALYSE
+        print("🤖 Activation de la validation IA anti-faux positifs...")
+        
+        try:
+            from ai_validation_module import AIValidationModule
+            ai_validator = AIValidationModule()
+            
+            resultats_valides_ia = []
+            total_faux_positifs = 0
+            
+            for resultat in resultats_bruts:
+                entreprise = resultat.get('entreprise', {})
+                donnees_thematiques = resultat.get('donnees_thematiques', {})
+                
+                if donnees_thematiques:
+                    nom = entreprise.get('nom', 'N/A')
+                    print(f"🔍 Validation IA: {nom}")
+                    
+                    # ✅ VALIDATION IA DES RÉSULTATS
+                    donnees_validees = ai_validator.batch_validate_results(
+                        entreprise, 
+                        donnees_thematiques
+                    )
+                    
+                    # Comptage faux positifs éliminés
+                    nb_avant = sum(len(data.get('extraits_textuels', [])) for data in donnees_thematiques.values() if isinstance(data, dict))
+                    nb_apres = sum(len(data) for data in donnees_validees.values())
+                    total_faux_positifs += (nb_avant - nb_apres)
+                    
+                    # Mise à jour avec données validées
+                    resultat_valide = resultat.copy()
+                    resultat_valide['donnees_thematiques'] = donnees_validees
+                    resultat_valide['validation_ia_appliquee'] = True
+                    resultats_valides_ia.append(resultat_valide)
+                else:
+                    resultats_valides_ia.append(resultat)
+            
+            print(f"✅ Validation IA terminée: {total_faux_positifs} faux positifs éliminés")
+            
+            # Utiliser les résultats validés par l'IA
+            resultats_bruts = resultats_valides_ia
+            
+        except Exception as e:
+            print(f"❌ Erreur validation IA: {e}")
+            print("➡️ Analyse sans validation IA")
         
         # ✅ ADAPTATION SEUILS POUR PME
-        analyseur.seuil_pertinence = 0.25  # Plus permissif que 0.5
-        print(f"🔧 Seuils PME adaptés: pertinence = {analyseur.seuil_pertinence}")
+        analyseur.seuil_pertinence = 0.15  # TRÈS permissif pour PME
+        print(f"🔧 Seuils PME ultra-permissifs: pertinence = {analyseur.seuil_pertinence}")
         
+        # ✅ ANALYSE AVEC DONNÉES VALIDÉES
         donnees_enrichies = analyseur.analyser_resultats(resultats_bruts, logger=logger)
         
         # Statistiques d'analyse

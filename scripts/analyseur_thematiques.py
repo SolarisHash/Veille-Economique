@@ -1044,7 +1044,7 @@ class AnalyseurThematiques:
                 continue
         
         # Statistiques de détection
-        entreprises_actives = [e for e in entreprises_enrichies if e.get('score_global', 0) > 0.2]
+        entreprises_actives = [e for e in entreprises_enrichies if e.get('score_global', 0) > 0.05]  # Seuil ultra-bas
         entreprises_tres_actives = [e for e in entreprises_enrichies if e.get('score_global', 0) > 0.5]
         
         print(f"✅ Analyse terminée pour {len(entreprises_enrichies)} entreprises")
