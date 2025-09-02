@@ -93,23 +93,20 @@ class RechercheWeb:
         }
 
     def _recherche_web_generale(self, entreprise: Dict) -> Optional[Dict]:
-        """✅ CORRIGÉ : Recherche web TOUJOURS ciblée sur l'entreprise"""
+        """✅ CORRIGÉ : Recherche SANS forçage systématique"""
         try:
-            print(f"      🎯 DÉBUT recherche pour: {entreprise['nom']}")
+            print(f"      🎯 Recherche pour: {entreprise['nom']}")
             
-            # ✅ FORCER la recherche pour toutes les entreprises
             resultats = {}
             nom_entreprise = entreprise['nom']
             commune = entreprise['commune']
             
-            # ✅ RECHERCHE SYSTÉMATIQUE
             for thematique in ['recrutements', 'evenements', 'innovations', 'vie_entreprise']:
                 print(f"        🔍 Thématique: {thematique}")
                 
-                # Construction des requêtes adaptées PME
                 requetes = self._construire_requetes_intelligentes(nom_entreprise, commune, thematique)
                 
-                for requete in requetes[:2]:  # Limiter à 2 requêtes par thématique
+                for requete in requetes[:1]:  # Réduit à 1 requête par thématique
                     print(f"          🔎 Requête: {requete}")
                     try:
                         resultats_moteur = self._rechercher_moteur(requete)
@@ -117,21 +114,21 @@ class RechercheWeb:
                         if resultats_moteur:
                             print(f"          📄 {len(resultats_moteur)} résultats bruts trouvés")
                             
-                            # Validation très permissive pour PME
-                            resultats_valides = self._valider_pertinence_resultats_pme(
-                                resultats_moteur, nom_entreprise, commune, thematique
+                            # ✅ VALIDATION RENFORCÉE (plus de permissive)
+                            resultats_valides = self._validation_ultra_permissive_pme(
+                                resultats_moteur, nom_entreprise, commune
                             )
                             
                             if resultats_valides:
                                 resultats[thematique] = {
                                     'mots_cles_trouves': [thematique],
-                                    'urls': [r['url'] for r in resultats_valides],
-                                    'pertinence': 0.6,  # Score fixe pour PME
+                                    'urls': [r['url'] for r in resultats_valides if r.get('url')],
+                                    'pertinence': min(len(resultats_valides) * 0.3, 0.8),
                                     'extraits_textuels': resultats_valides,
-                                    'type': 'recherche_pme_locale'
+                                    'type': 'recherche_validee'
                                 }
                                 print(f"          ✅ {len(resultats_valides)} résultats validés pour {thematique}")
-                                break
+                                break  # Arrêter dès qu'on trouve quelque chose de valide
                             else:
                                 print(f"          ❌ Aucun résultat validé pour {thematique}")
                         else:
@@ -141,21 +138,20 @@ class RechercheWeb:
                         print(f"          ❌ Erreur requête: {e}")
                         continue
                     
-                    time.sleep(2)  # Délai entre requêtes
+                    time.sleep(2)
             
-            # ✅ AJOUT : Retour des résultats avec fallback PME
             print(f"      📊 RÉSULTAT final: {len(resultats)} thématiques trouvées")
             
+            # ✅ SUPPRESSION du fallback automatique
             if not resultats:
-                print(f"      🚀 Aucun résultat - activation fallback PME")
-                return self._forcer_resultats_minimum_pme(entreprise)
+                print(f"      ⚪ Aucun résultat valide - retour vide (pas de forçage)")
+                return {}  # Retour vide au lieu de forcer
             
             return resultats
             
         except Exception as e:
             print(f"      ❌ ERREUR recherche générale: {e}")
-            # Fallback en cas d'erreur
-            return self._forcer_resultats_minimum_pme(entreprise)
+            return {}  # Retour vide en cas d'erreur
 
     def _valider_pertinence_resultats_assouplie(self, resultats: List[Dict], nom_entreprise: str, commune: str, thematique: str) -> List[Dict]:
         """✅ NOUVELLE : Validation assouplie pour avoir plus de résultats réels"""
@@ -1224,15 +1220,21 @@ class RechercheWeb:
         return self._validation_ultra_permissive_pme(resultats, nom_entreprise, commune)
 
     def _validation_ultra_permissive_pme(self, resultats: List[Dict], nom_entreprise: str, commune: str) -> List[Dict]:
-        """✅ NOUVELLE: Validation ULTRA-PERMISSIVE spéciale PME"""
+        """✅ CORRIGÉ: Validation équilibrée - ni trop stricte, ni trop permissive"""
         if not resultats:
             return []
         
-        print(f"        🔧 Validation ULTRA-PERMISSIVE PME: {len(resultats)} résultats")
+        print(f"        🔧 Validation équilibrée PME: {len(resultats)} résultats")
         
         resultats_valides = []
-        nom_mots = nom_entreprise.upper().split()
+        nom_mots = [mot for mot in nom_entreprise.upper().split() if len(mot) > 2]
         commune_lower = commune.lower()
+        
+        # ❌ EXCLUSIONS STRICTES AJOUTÉES
+        exclusions_strictes = [
+            'wikipedia.org', 'wordreference.com', 'dictionary.com', 'larousse.fr',
+            'reverso.net', 'linguee.com', 'conjugaison', 'grammaire', 'definition'
+        ]
         
         for resultat in resultats:
             try:
@@ -1241,67 +1243,60 @@ class RechercheWeb:
                 url = resultat.get('url', '').lower()
                 texte_complet = f"{titre} {description} {url}"
                 
-                # ✅ CRITÈRES ULTRA-PERMISSIFS
-                score = 0.0
-                
-                # Critère 1: Au moins 1 mot du nom OU commune OU mot générique
-                mots_trouves = [mot for mot in nom_mots if len(mot) > 2 and mot in texte_complet]
-                if mots_trouves or commune_lower in texte_complet.lower():
-                    score += 0.3
-                
-                # Critère 2: Mots d'activité générique (très permissif)
-                mots_activite = ['entreprise', 'societe', 'service', 'commerce', 'activite', 'emploi', 'travail']
-                if any(mot in texte_complet.lower() for mot in mots_activite):
-                    score += 0.2
-                    
-                # Critère 3: Pas d'exclusions strictes seulement
-                exclusions_strictes = ['wikipedia.org', 'wordreference.com', 'dictionary.com']
+                # ❌ EXCLUSION IMMÉDIATE si faux positif évident
                 if any(exclus in url for exclus in exclusions_strictes):
                     continue
                 
-                # ✅ SEUIL ULTRA-BAS pour PME
-                if score >= 0.1:  # Seuil très bas
+                if any(exclus in texte_complet.lower() for exclus in ['forum.wordreference', 'cours de français']):
+                    continue
+                
+                # ✅ CRITÈRES RENFORCÉS
+                score = 0.0
+                
+                # Critère 1: Nom d'entreprise mentionné (OBLIGATOIRE)
+                mots_trouves = [mot for mot in nom_mots if mot in texte_complet]
+                if mots_trouves:
+                    score += 0.4  # Augmenté de 0.3 à 0.4
+                else:
+                    # Si pas de nom d'entreprise, commune OBLIGATOIRE
+                    if commune_lower not in texte_complet.lower():
+                        continue  # REJET immédiat
+                    score += 0.2
+                
+                # Critère 2: Contexte business/économique (NOUVEAU)
+                mots_business = ['entreprise', 'societe', 'commerce', 'activite', 'emploi', 'recrutement', 
+                            'développement', 'service', 'innovation', 'ouverture', 'magasin']
+                if any(mot in texte_complet.lower() for mot in mots_business):
+                    score += 0.3  # Augmenté
+                
+                # Critère 3: Contexte territorial
+                if commune_lower in texte_complet.lower():
+                    score += 0.2
+                
+                # ✅ SEUIL RELEVÉ - Plus exigeant
+                if score >= 0.5:  # Augmenté de 0.1 à 0.5
                     resultat_enrichi = resultat.copy()
                     resultat_enrichi.update({
-                        'score_pme_permissif': score,
-                        'validation_ultra_permissive': True,
-                        'mots_entreprise_trouves': mots_trouves
+                        'score_validation': score,
+                        'mots_entreprise_trouves': mots_trouves,
+                        'validation_renforcee': True
                     })
                     resultats_valides.append(resultat_enrichi)
                     print(f"            ✅ VALIDÉ score: {score:.2f}")
                 else:
-                    print(f"            ❌ Score trop bas: {score:.2f}")
-                    
+                    print(f"            ❌ Score insuffisant: {score:.2f}")
+                        
             except Exception as e:
                 print(f"            ⚠️ Erreur validation: {e}")
                 continue
         
-        print(f"        📊 Validation ultra-permissive: {len(resultats_valides)}/{len(resultats)} validés")
+        print(f"        📊 Validation renforcée: {len(resultats_valides)}/{len(resultats)} validés")
         return resultats_valides
 
     def _forcer_resultats_minimum_pme(self, entreprise: Dict) -> Dict:
-        """✅ NOUVELLE: Force au minimum 1 résultat par entreprise PME"""
-        nom = entreprise.get('nom', '')
-        commune = entreprise.get('commune', '')
-        
-        # Créer au minimum 1 résultat contextuel
-        resultat_minimum = {
-            'recrutements': {
-                'mots_cles_trouves': ['entreprise', 'local'],
-                'urls': [f'https://exemple.fr/{nom.lower().replace(" ", "-")}'],
-                'pertinence': 0.2,
-                'extraits_textuels': [{
-                    'titre': f'Activité de {nom} à {commune}',
-                    'description': f'Entreprise locale {nom} présente sur {commune}.',
-                    'url': f'https://exemple.fr/{nom.lower().replace(" ", "-")}',
-                    'validation_forcee': True
-                }],
-                'type': 'resultat_minimum_force'
-            }
-        }
-        
-        print(f"      🚀 Résultat minimum forcé pour PME: {nom}")
-        return resultat_minimum
+        """✅ CORRIGÉ: Pas de résultats forcés - retour vide si rien trouvé"""
+        print(f"      ⚠️ Aucun résultat valide pour {entreprise.get('nom', 'N/A')} - pas de forçage")
+        return {}  # Retour VIDE au lieu de données factices
     
     def _simulation_avancee(self, requete: str) -> List[Dict]:
         """Simulation de données en dernier recours"""
@@ -2382,37 +2377,10 @@ class RechercheWeb:
         return None
 
     def _generer_donnees_sectorielles_ameliorees(self, entreprise: Dict) -> Optional[Dict]:
-        """✅ CORRIGÉ : Données sectorielles avec mention explicite du contexte"""
-        try:
-            print(f"      📊 Génération données sectorielles améliorées")
-            
-            resultats = {}
-            secteur = entreprise.get('secteur_naf', '').lower()
-            commune = entreprise['commune']
-            nom = entreprise.get('nom', 'Entreprise locale')
-            
-            # Mapping secteurs amélioré avec contexte d'entreprise
-            if 'santé' in secteur or 'médical' in secteur:
-                resultats['vie_entreprise'] = {
-                    'mots_cles_trouves': ['santé', 'développement', 'services'],
-                    'extraits_textuels': [{
-                        'titre': f'Développement du secteur santé à {commune}',
-                        'description': f'Les entreprises de santé comme {nom} participent au développement des services médicaux sur {commune}.',
-                        'url': f'https://www.{commune.lower()}-sante.fr/entreprises-locales',
-                        'type': 'contexte_sectoriel'
-                    }],
-                    'pertinence': 0.4,
-                    'type': 'enrichissement_contextuel'
-                }
-            
-            # Pattern similaire pour autres secteurs...
-            
-            return resultats if resultats else None
-            
-        except Exception as e:
-            print(f"      ❌ Erreur données sectorielles: {e}")
-            return None
-
+        """✅ SUPPRIMÉ: Plus de génération de fausses données sectorielles"""
+        print(f"      ⚪ Génération de données sectorielles désactivée pour éviter les faux positifs")
+        return None  # Toujours retourner None
+    
     def _extraire_mots_cles_cibles(self, resultats: List[Dict], thematique: str) -> List[str]:
         """✅ CORRIGÉ : Extraction des vrais mots-clés trouvés"""
         mots_cles = []

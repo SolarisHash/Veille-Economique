@@ -1,78 +1,89 @@
-# Configuration ULTRA-PERMISSIVE pour PME locales - CORRIGÉE
+# 🔧 MODIFICATIONS À APPORTER DANS config/parametres.yaml
 
-# Paramètres de traitement - ASSOUPLIS POUR PME
+# Configuration ÉQUILIBRÉE pour PME locales - QUALITÉ RENFORCÉE
+
+# Paramètres de traitement - RELEVÉS pour plus de qualité
 traitement:
   echantillon_test: 20
   periode_recherche_mois: 12  
   timeout_requetes_sec: 15    
   delai_entre_requetes_sec: 3 
-  seuil_validation_minimum: 0.1  # ✅ ABAISSÉ de 0.45 à 0.1
+  seuil_validation_minimum: 0.3  # ✅ RELEVÉ de 0.1 à 0.3
 
-# Paramètres de scoring - ULTRA-PERMISSIFS POUR PME
+# Paramètres de scoring - ÉQUILIBRÉS pour PME
 scoring:
-  seuil_pertinence_minimum: 0.15  # ✅ ABAISSÉ de 0.4 à 0.15
+  seuil_pertinence_minimum: 0.4  # ✅ RELEVÉ de 0.15 à 0.4
   poids_source_officielle: 1.0
   poids_presse_locale: 0.9       
-  poids_web_general: 0.7         
-  bonus_recence: 0.3             
-  bonus_source_multiple: 0.2     
+  poids_web_general: 0.6         # ✅ RÉDUIT de 0.7 à 0.6
+  bonus_recence: 0.2             # ✅ RÉDUIT de 0.3 à 0.2
+  bonus_source_multiple: 0.15    # ✅ RÉDUIT de 0.2 à 0.15
 
-# Paramètres validation ULTRA-ASSOUPLIS pour PME
+# Paramètres validation ÉQUILIBRÉS pour PME
 validation:
-  score_entreprise_minimum: 0.1  # ✅ ABAISSÉ de 0.4 à 0.1
+  score_entreprise_minimum: 0.25  # ✅ RELEVÉ de 0.1 à 0.25
   score_commune_bonus: 0.2       
-  score_thematique_minimum: 0.05 # ✅ ABAISSÉ de 0.1 à 0.05
-  exclusions_strictes: false     
+  score_thematique_minimum: 0.2   # ✅ RELEVÉ de 0.05 à 0.2
+  exclusions_strictes: true       # ✅ ACTIVÉ au lieu de false
 
-# 📊 Seuils PME (ultra-permissifs)
+# 📊 Seuils PME (équilibrés)
 seuils_pme:
-  validation_minimum: 0.1    # ✅ ABAISSÉ de 0.45 à 0.1
-  score_entreprise_minimum: 0.1  # ✅ COHÉRENT à 0.1
+  validation_minimum: 0.3      # ✅ RELEVÉ de 0.1 à 0.3
+  score_entreprise_minimum: 0.25  # ✅ COHÉRENT à 0.25
+  score_global_minimum: 0.2   # ✅ NOUVEAU seuil pour score global
 
-# Mots-clés ENRICHIS pour PME locales
+# ❌ EXCLUSIONS STRICTES (nouveau)
+exclusions:
+  sites_non_pertinents:
+    - "wikipedia.org"
+    - "wordreference.com"
+    - "dictionary.com"
+    - "larousse.fr"
+    - "reverso.net"
+    - "linguee.com"
+  
+  contenu_non_pertinent:
+    - "dictionnaire"
+    - "traduction" 
+    - "conjugaison"
+    - "grammaire"
+    - "cours de français"
+    - "définition"
+    - "forum.wordreference"
+
+# Mots-clés AFFINÉS pour PME locales (qualité > quantité)
 mots_cles:
   recrutements:
-    - "cherche"
-    - "recherche" 
-    - "recrute"
-    - "embauche"
-    - "offre emploi"
-    - "apprenti"
-    - "stagiaire"
-    - "candidat"
-    - "poste"
+    - "recrute"        # Verbe actif
+    - "embauche"       # Action concrète
+    - "offre emploi"   # Annonce précise
+    - "cherche"        # PME language
+    - "CDI"           # Type contrat
+    - "apprenti"      # PME spécifique
     
   evenements:
-    - "ouverture"
-    - "nouveau"
-    - "inauguration"
-    - "porte ouverte"
-    - "événement"
-    - "manifestation"
-    - "salon"
-    - "exposition"
+    - "ouverture"     # Action concrète
+    - "inauguration"  # Événement réel
+    - "porte ouverte" # PME classique
+    - "nouveau"       # Changement
+    - "événement"     # Générique mais utile
     
   innovations:
-    - "nouveau service"
-    - "améliore"
-    - "modernise"
-    - "innovation"
-    - "développe"
-    - "rénove"
-    - "équipe"
-    - "investit"
+    - "nouveau service"  # PME scale innovation
+    - "améliore"        # Amélioration continue
+    - "modernise"       # Modernisation
+    - "innovation"      # Terme direct
+    - "développe"       # Développement
     
   vie_entreprise:
-    - "développement"
-    - "expansion" 
-    - "partenariat"
-    - "ouverture"
-    - "agrandit"
-    - "déménage"
-    - "reprend"
-    - "installation"
+    - "développement"   # Croissance
+    - "expansion"       # Extension
+    - "partenariat"     # Collaboration
+    - "ouverture"       # Nouvelle activité
+    - "agrandit"        # Extension physique
+    - "déménage"        # Changement local
 
-# TERRITOIRE (gardé identique)
+# TERRITOIRE (inchangé)
 territoire:
   codes_postaux_cibles:
   - "77600"  # Bussy-Saint-Georges
@@ -94,7 +105,7 @@ communes_prioritaires:
   - "Torcy"
   - "Lagny-sur-Marne"
 
-# 🏢 Critères PME spécifiques (très permissifs)
+# 🏢 Critères PME équilibrés
 filtrage_pme:
   effectif_max: 249
   secteurs_prioritaires:
@@ -111,4 +122,11 @@ search_engines_priority:
   1: "bing"
   2: "duckduckgo" 
   3: "yandex"
-  4: "simulation"  # Fallback final
+  4: "simulation"  # Fallback final désactivé par défaut
+
+# ✅ NOUVEAUX PARAMÈTRES DE QUALITÉ
+qualite:
+  longueur_titre_minimum: 15        # Caractères minimum pour titre
+  longueur_description_minimum: 30  # Caractères minimum pour description
+  mots_business_requis: true        # Exiger mots business dans contenu
+  validation_contenu_strict: true   # Validation stricte du contenu

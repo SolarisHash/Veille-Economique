@@ -480,7 +480,7 @@ if __name__ == "__main__":
     print()
     
     # Configuration du nombre d'entreprises
-    NB_ENTREPRISES_CIBLE = 25  # [CONFIG] Changez cette valeur selon vos besoins
+    NB_ENTREPRISES_CIBLE = 10  # [CONFIG] Changez cette valeur selon vos besoins
     
     try:
         # [DEBUG] DEBUG PREALABLE

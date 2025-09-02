@@ -18,7 +18,7 @@ class AnalyseurThematiques:
         """Initialisation de l'analyseur avec TOUS les mots-clés"""
         self.thematiques = thematiques_config
         self.config = self._charger_config_mots_cles()
-        self.seuil_pertinence = 0.1  # ✅ ULTRA-PERMISSIF pour PME
+        self.seuil_pertinence = 0.3  # ✅ ULTRA-PERMISSIF pour PME
         self.periode_recente = timedelta(days=30)
         
         # ✅ AJOUT: Auto-adaptation pour PME
@@ -297,51 +297,47 @@ class AnalyseurThematiques:
         print("🐛 FIN DEBUG FORMAT\n")
 
     def _calculer_score_avec_vos_donnees(self, donnees: Dict, thematique: str) -> float:
-        """✅ Calcul de score adapté au format exact de vos données"""
+        """✅ CORRIGÉ: Calcul de score plus exigeant"""
         score_total = 0.0
         
-        print(f"           🐛 DEBUG: Analyse {thematique}")
+        print(f"           🔍 Analyse RENFORCÉE {thematique}")
         print(f"           📊 Données reçues: {list(donnees.keys())}")
         
-        print(f"           📊 Analyse des données: {list(donnees.keys())}")
-        
-        # 1. Score basé sur la pertinence calculée par votre système
+        # 1. Score pertinence (réduit)
         if 'pertinence' in donnees:
             pertinence_brute = donnees['pertinence']
-            # Normalisation : vos scores peuvent être > 1.0
-            score_pertinence = min(pertinence_brute, 1.0)
+            # ✅ Plus conservateur
+            score_pertinence = min(pertinence_brute * 0.8, 0.6)  # Réduit le multiplicateur
             score_total += score_pertinence
             print(f"           🎯 Pertinence: {pertinence_brute} → {score_pertinence}")
         
-        # 2. Score basé sur les mots-clés trouvés
+        # 2. Score mots-clés (réduit)
         if 'mots_cles_trouves' in donnees:
             mots_cles = donnees['mots_cles_trouves']
             if isinstance(mots_cles, list) and len(mots_cles) > 0:
-                score_mots_cles = min(len(mots_cles) * 0.15, 0.4)
+                score_mots_cles = min(len(mots_cles) * 0.1, 0.3)  # Réduit de 0.15 à 0.1
                 score_total += score_mots_cles
                 print(f"           🔑 Mots-clés ({len(mots_cles)}): +{score_mots_cles}")
         
-        # 3. Score basé sur les extraits textuels
+        # 3. Score extraits (avec validation qualité)
         if 'extraits_textuels' in donnees:
             extraits = donnees['extraits_textuels']
             if isinstance(extraits, list) and len(extraits) > 0:
-                score_extraits = self._analyser_extraits_vos_donnees(extraits, thematique)
-                score_total += score_extraits
-                print(f"           📄 Extraits ({len(extraits)}): +{score_extraits}")
+                # ✅ VALIDATION QUALITÉ DES EXTRAITS
+                extraits_valides = self._valider_qualite_extraits(extraits, thematique)
+                if extraits_valides:
+                    score_extraits = min(len(extraits_valides) * 0.15, 0.4)
+                    score_total += score_extraits
+                    print(f"           📄 Extraits valides ({len(extraits_valides)}/{len(extraits)}): +{score_extraits}")
+                else:
+                    print(f"           ❌ Aucun extrait de qualité suffisante")
         
-        # 4. Bonus pour URLs multiples
-        if 'urls' in donnees:
-            urls = donnees['urls']
-            if isinstance(urls, list) and len(urls) > 1:
-                bonus_urls = min(len(urls) * 0.05, 0.2)
-                score_total += bonus_urls
-                print(f"           🔗 URLs ({len(urls)}): +{bonus_urls}")
-        
-        # Score final avec limite réaliste
-        score_final = min(score_total, 0.9)
-        print(f"           🏆 Score final: {score_final}")
+        # Score final plus conservateur
+        score_final = min(score_total, 0.8)  # Limite à 0.8 au lieu de 0.9
+        print(f"           🏆 Score final RENFORCÉ: {score_final}")
         
         return score_final
+
 
     def _analyser_extraits_vos_donnees(self, extraits: List[Dict], thematique: str) -> float:
         """✅ CORRIGÉ : Analyse des extraits dans votre format exact"""
@@ -567,55 +563,47 @@ class AnalyseurThematiques:
         score_final = min(score_base + bonus_source + bonus_recence, 0.8)  # Maximum 0.8
         return score_final
     
-    def _valider_qualite_extraits(self, extraits_textuels: List[Dict]) -> float:
-        """Validation de la qualité des extraits trouvés"""
-        if not extraits_textuels:
-            return 0.1
+    def _valider_qualite_extraits(self, extraits: List[Dict], thematique: str) -> List[Dict]:
+        """✅ NOUVEAU: Validation de la qualité des extraits"""
+        extraits_valides = []
         
-        score_qualite = 1.0
-        
-        for extrait in extraits_textuels:
+        for extrait in extraits:
+            if not isinstance(extrait, dict):
+                continue
+            
             titre = extrait.get('titre', '').lower()
             description = extrait.get('description', '').lower()
             url = extrait.get('url', '').lower()
             
-            contenu = f"{titre} {description} {url}"
+            texte_complet = f"{titre} {description}"
             
-            # Pénalités pour contenu non pertinent
-            penalites = [
-                ('forum.wordreference.com', -0.8),  # Forums linguistiques
-                ('wikipedia.org', -0.3),            # Wikipédia généraliste
-                ('dictionary', -0.6),               # Dictionnaires
-                ('translation', -0.6),              # Traductions
-                ('grammar', -0.7),                  # Grammaire
-                ('linguistique', -0.7),             # Linguistique
-                ('definition', -0.5),               # Définitions
-                ('much or many', -0.9),             # Discussions grammaticales
-                ('is/are', -0.9),                   # Questions grammaticales
+            # ❌ EXCLUSIONS STRICTES
+            exclusions = [
+                'dictionnaire', 'dictionary', 'traduction', 'translation',
+                'wikipedia', 'forum.wordreference', 'conjugaison', 'grammaire',
+                'cours de français', 'leçon', 'définition'
             ]
             
-            for terme_penalite, reduction in penalites:
-                if terme_penalite in contenu:
-                    score_qualite += reduction
-                    print(f"         ⚠️  Pénalité {terme_penalite}: {reduction}")
+            if any(exclus in texte_complet for exclus in exclusions):
+                continue
             
-            # Bonus pour contenu pertinent
-            bonus = [
-                ('.fr', 0.1),                       # Sites français
-                ('entreprise', 0.1),                # Contexte entreprise
-                ('emploi', 0.2),                    # Emploi
-                ('recrutement', 0.2),               # Recrutement
-                ('innovation', 0.15),               # Innovation
-                ('développement', 0.1),             # Développement
-                ('économie', 0.1),                  # Économie
-            ]
+            # ✅ VALIDATION CONTENU
+            # Doit avoir un minimum de contenu substantiel
+            if len(titre) < 5 and len(description) < 20:
+                continue
             
-            for terme_bonus, augmentation in bonus:
-                if terme_bonus in contenu:
-                    score_qualite += augmentation
+            # Doit contenir des mots en relation avec la thématique
+            mots_thematiques = self.thematiques_mots_cles.get(thematique, [])
+            if mots_thematiques:
+                if not any(mot.lower() in texte_complet for mot in mots_thematiques):
+                    # Si aucun mot thématique, doit au moins contenir des mots business
+                    mots_business = ['entreprise', 'société', 'commerce', 'service', 'activité']
+                    if not any(mot in texte_complet for mot in mots_business):
+                        continue
+            
+            extraits_valides.append(extrait)
         
-        # Score final entre 0.1 et 1.0
-        return max(0.1, min(score_qualite, 1.0))
+        return extraits_valides
     
     def _get_bonus_source_realiste(self, source: str) -> float:
         """Bonus réduits selon la fiabilité de la source"""
@@ -628,20 +616,13 @@ class AnalyseurThematiques:
         return bonus.get(source, 0.0)
     
     def _calculer_score_global(self, resultats_thematiques: Dict) -> float:
-        """Calcule un score global d'activité de l'entreprise.
-
-        Seules les thématiques considérées comme suffisamment pertinentes
-        (score > 0.3) sont prises en compte. La moyenne de ces scores est
-        ensuite augmentée d'un léger bonus reflétant la diversité des
-        thématiques détectées, le tout étant plafonné à ``0.8`` afin de
-        réserver une marge pour d'éventuels enrichissements externes
-        (par exemple l'analyse de réseaux sociaux).
-        """
-
+        """✅ CORRIGÉ: Score global plus exigeant"""
+        
+        # ✅ SEUIL RELEVÉ pour considérer une thématique
         scores_valides = [
             res['score_pertinence']
             for res in resultats_thematiques.values()
-            if res['trouve'] and res['score_pertinence'] > 0.3
+            if res['trouve'] and res['score_pertinence'] > 0.4  # Relevé de 0.3 à 0.4
         ]
 
         if not scores_valides:
@@ -649,8 +630,8 @@ class AnalyseurThematiques:
 
         score_moyen = sum(scores_valides) / len(scores_valides)
 
-        # Bonus de 0.02 par thématique pertinente (maximum 0.1)
-        bonus_diversite = min(len(scores_valides) * 0.02, 0.1)
+        # Bonus diversité réduit
+        bonus_diversite = min(len(scores_valides) * 0.015, 0.08)  # Réduit
 
         return min(score_moyen + bonus_diversite, 0.8)
     
@@ -1060,25 +1041,26 @@ class AnalyseurThematiques:
                 continue
         
         # Statistiques de détection
-        entreprises_actives = [e for e in entreprises_enrichies if e.get('score_global', 0) > 0.05]  # ✅ Seuil ultra-bas PME
-        entreprises_tres_actives = [e for e in entreprises_enrichies if e.get('score_global', 0) > 0.3]  # ✅ Adapté PME
+        entreprises_actives = [e for e in entreprises_enrichies if e.get('score_global', 0) > 0.2]  # Relevé de 0.05 à 0.2
+        entreprises_tres_actives = [e for e in entreprises_enrichies if e.get('score_global', 0) > 0.5]  # Relevé de 0.3 à 0.5
         
         print(f"✅ Analyse terminée pour {len(entreprises_enrichies)} entreprises")
-        print(f"🎯 Entreprises actives (>0.05): {len(entreprises_actives)}")
-        print(f"🏆 Entreprises très actives (>0.3): {len(entreprises_tres_actives)}")
+        print(f"🎯 Entreprises actives (>0.2): {len(entreprises_actives)}")  # Seuil affiché mis à jour
+        print(f"🏆 Entreprises très actives (>0.5): {len(entreprises_tres_actives)}")  # Seuil affiché mis à jour
         
         if len(entreprises_actives) > 0:
-            print("🎉 SUCCÈS : Entreprises PME détectées !")
+            print("🎉 SUCCÈS : Entreprises détectées avec critères renforcés !")
             for ent in entreprises_actives[:3]:
                 nom = ent.get('nom', 'N/A')
                 score = ent.get('score_global', 0)
                 themes = ent.get('thematiques_principales', [])
                 print(f"    • {nom}: {score:.3f} → {themes}")
         else:
-            print("⚠️ AUCUNE entreprise PME détectée - seuils trop stricts ou problème données")
+            print("⚠️ Aucune entreprise ne répond aux critères renforcés")
+            print("💡 Ceci est normal avec des critères de qualité plus stricts")
         
         return entreprises_enrichies
-    
+        
     def _analyser_entreprise_adaptee(self, resultat: Dict) -> Dict:
         """✅ NOUVEAU : Analyse d'entreprise adaptée aux données réelles"""
         entreprise = resultat.get('entreprise', {}).copy()
