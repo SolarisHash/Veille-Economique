@@ -1220,20 +1220,21 @@ class RechercheWeb:
         return self._validation_ultra_permissive_pme(resultats, nom_entreprise, commune)
 
     def _validation_ultra_permissive_pme(self, resultats: List[Dict], nom_entreprise: str, commune: str) -> List[Dict]:
-        """✅ CORRIGÉ: Validation équilibrée - ni trop stricte, ni trop permissive"""
+        """✅ CORRIGÉ: Validation plus stricte pour éviter les faux positifs"""
         if not resultats:
             return []
         
-        print(f"        🔧 Validation équilibrée PME: {len(resultats)} résultats")
+        print(f"        🔧 Validation stricte PME: {len(resultats)} résultats")
         
         resultats_valides = []
         nom_mots = [mot for mot in nom_entreprise.upper().split() if len(mot) > 2]
         commune_lower = commune.lower()
         
-        # ❌ EXCLUSIONS STRICTES AJOUTÉES
+        # ❌ EXCLUSIONS STRICTES 
         exclusions_strictes = [
             'wikipedia.org', 'wordreference.com', 'dictionary.com', 'larousse.fr',
-            'reverso.net', 'linguee.com', 'conjugaison', 'grammaire', 'definition'
+            'reverso.net', 'linguee.com', 'conjugaison', 'grammaire', 'definition',
+            'exemple.fr', 'exemple-local.fr', 'salon-lagny-sur-marne.fr'  # URLs factices
         ]
         
         for resultat in resultats:
@@ -1243,46 +1244,49 @@ class RechercheWeb:
                 url = resultat.get('url', '').lower()
                 texte_complet = f"{titre} {description} {url}"
                 
-                # ❌ EXCLUSION IMMÉDIATE si faux positif évident
+                # ❌ EXCLUSION IMMÉDIATE des URLs factices et faux positifs
                 if any(exclus in url for exclus in exclusions_strictes):
+                    print(f"            ❌ Exclu (URL factice): {url[:50]}...")
                     continue
                 
-                if any(exclus in texte_complet.lower() for exclus in ['forum.wordreference', 'cours de français']):
+                # ❌ EXCLUSION contenu générique/factice
+                if any(terme in texte_complet.lower() for terme in [
+                    'information concernant', 'données contextuelles', 'exemple local',
+                    'activité économique locale', 'développement de l\'activité'
+                ]):
+                    print(f"            ❌ Exclu (contenu générique): {titre[:50]}...")
                     continue
                 
-                # ✅ CRITÈRES RENFORCÉS
+                # ✅ VALIDATION RENFORCÉE
                 score = 0.0
                 
                 # Critère 1: Nom d'entreprise mentionné (OBLIGATOIRE)
                 mots_trouves = [mot for mot in nom_mots if mot in texte_complet]
                 if mots_trouves:
-                    score += 0.4  # Augmenté de 0.3 à 0.4
+                    score += 0.5  # Score élevé pour mention entreprise
                 else:
-                    # Si pas de nom d'entreprise, commune OBLIGATOIRE
-                    if commune_lower not in texte_complet.lower():
-                        continue  # REJET immédiat
+                    continue  # REJET si pas de nom d'entreprise
+                
+                # Critère 2: URL valide et accessible
+                if url.startswith('http') and not any(factice in url for factice in ['exemple', 'test', 'demo']):
+                    score += 0.3
+                else:
+                    continue  # REJET si URL factice
+                
+                # Critère 3: Contenu substantiel
+                if len(titre) > 15 and len(description) > 30:
                     score += 0.2
                 
-                # Critère 2: Contexte business/économique (NOUVEAU)
-                mots_business = ['entreprise', 'societe', 'commerce', 'activite', 'emploi', 'recrutement', 
-                            'développement', 'service', 'innovation', 'ouverture', 'magasin']
-                if any(mot in texte_complet.lower() for mot in mots_business):
-                    score += 0.3  # Augmenté
-                
-                # Critère 3: Contexte territorial
-                if commune_lower in texte_complet.lower():
-                    score += 0.2
-                
-                # ✅ SEUIL RELEVÉ - Plus exigeant
-                if score >= 0.5:  # Augmenté de 0.1 à 0.5
+                # ✅ SEUIL STRICT - Seulement résultats de qualité
+                if score >= 0.8:  # Seuil très élevé
                     resultat_enrichi = resultat.copy()
                     resultat_enrichi.update({
                         'score_validation': score,
                         'mots_entreprise_trouves': mots_trouves,
-                        'validation_renforcee': True
+                        'validation_stricte': True
                     })
                     resultats_valides.append(resultat_enrichi)
-                    print(f"            ✅ VALIDÉ score: {score:.2f}")
+                    print(f"            ✅ VALIDÉ score élevé: {score:.2f}")
                 else:
                     print(f"            ❌ Score insuffisant: {score:.2f}")
                         
@@ -1290,7 +1294,7 @@ class RechercheWeb:
                 print(f"            ⚠️ Erreur validation: {e}")
                 continue
         
-        print(f"        📊 Validation renforcée: {len(resultats_valides)}/{len(resultats)} validés")
+        print(f"        📊 Validation stricte: {len(resultats_valides)}/{len(resultats)} validés")
         return resultats_valides
 
     def _forcer_resultats_minimum_pme(self, entreprise: Dict) -> Dict:
@@ -1299,22 +1303,10 @@ class RechercheWeb:
         return {}  # Retour VIDE au lieu de données factices
     
     def _simulation_avancee(self, requete: str) -> List[Dict]:
-        """Simulation de données en dernier recours"""
-        print(f"          🔄 Simulation avancée pour: {requete}")
-        
-        # Extraction des mots-clés de la requête
-        mots_requete = [mot for mot in requete.split() if len(mot) > 3]
-        
-        if len(mots_requete) >= 2:
-            return [{
-                'titre': f'Information sur {mots_requete[0]}',
-                'description': f'Données contextuelles concernant {" ".join(mots_requete[:2])}',
-                'url': f'https://exemple.fr/info-{mots_requete[0].lower()}',
-                'type': 'simulation_avancee'
-            }]
-        
+        """✅ SUPPRIMÉ: Plus de simulation - retour vide"""
+        print(f"          ❌ Simulation désactivée - retour vide")
         return []
-
+    
     def _rechercher_duckduckgo(self, requete: str) -> Optional[List[Dict]]:
         """Recherche DuckDuckGo HTML"""
         try:
@@ -2221,34 +2213,46 @@ class RechercheWeb:
             time.sleep(random.uniform(10, 15))
             return None
 
-    def _rechercher_moteur(self, requete: str):
-        """
-        Exécute une recherche avec fallback multi-moteurs.
-        Doit retourner une liste de dicts {'titre','description','url'}.
-        """
-        # Ordre de préférence
+    def _rechercher_moteur(self, requete: str) -> Optional[List[Dict]]:
+        """Recherche avec moteurs réels SANS simulation factice"""
         try:
-            return self._rechercher_bing(requete) or []
+            # Tentative 1: BING 
+            try:
+                print(f"          🥇 Tentative Bing...")
+                resultats = self._rechercher_bing(requete)
+                if resultats:
+                    print(f"          ✅ Bing: {len(resultats)} résultats")
+                    return resultats
+            except Exception as e:
+                print(f"          ⚠️  Bing échoué: {str(e)}")
+            
+            # Tentative 2: YANDEX
+            try:
+                print(f"          🥈 Tentative Yandex...")
+                resultats = self._rechercher_yandex(requete)
+                if resultats:
+                    print(f"          ✅ Yandex: {len(resultats)} résultats")
+                    return resultats
+            except Exception as e:
+                print(f"          ⚠️  Yandex échoué: {str(e)}")
+            
+            # Tentative 3: DuckDuckGo
+            try:
+                print(f"          🥉 Tentative DuckDuckGo...")
+                resultats = self._rechercher_duckduckgo(requete)
+                if resultats:
+                    print(f"          ✅ DuckDuckGo: {len(resultats)} résultats")
+                    return resultats
+            except Exception as e:
+                print(f"          ⚠️  DuckDuckGo échoué: {str(e)}")
+            
+            # ✅ PLUS DE SIMULATION - Retour vide si aucun moteur ne fonctionne
+            print(f"          ❌ Tous les moteurs ont échoué - Aucun résultat")
+            return []
+            
         except Exception as e:
-            print(f"        ❌ Bing KO: {e}")
-
-        try:
-            return self._rechercher_duckduckgo(requete) or []
-        except Exception as e:
-            print(f"        ❌ DuckDuckGo KO: {e}")
-
-        # Compat: certains appels attendent ces noms
-        try:
-            return self._rechercher_google_avec_protection(requete) or []
-        except Exception as e:
-            print(f"        ❌ Google-protection KO: {e}")
-
-        try:
-            return self._rechercher_qwant(requete) or []
-        except Exception as e:
-            print(f"        ❌ Qwant KO: {e}")
-
-        return []
+            print(f"        ⚠️  Erreur recherche générale: {str(e)}")
+            return []
     
     def _rechercher_avec_bibliotheque(self, requete: str):
         """
@@ -2377,9 +2381,28 @@ class RechercheWeb:
         return None
 
     def _generer_donnees_sectorielles_ameliorees(self, entreprise: Dict) -> Optional[Dict]:
-        """✅ SUPPRIMÉ: Plus de génération de fausses données sectorielles"""
+        """✅ CORRIGÉ: Plus de génération de fausses données sectorielles"""
         print(f"      ⚪ Génération de données sectorielles désactivée pour éviter les faux positifs")
         return None  # Toujours retourner None
+    
+    def _forcer_resultats_minimum_pme(self, entreprise: Dict) -> Dict:
+        """✅ CORRIGÉ: Plus de résultats forcés - retour vide si rien trouvé"""
+        print(f"      ⚪ Aucun résultat valide pour {entreprise.get('nom', 'N/A')} - pas de forçage")
+        return {}  # Retour VIDE au lieu de données factices
+
+    def _generer_info_secteur(self, secteur: str, commune: str) -> Dict:
+        """✅ SUPPRIMÉ: Plus de génération d'informations sectorielles factices"""
+        return {}
+
+    def _generer_donnees_insee_enrichies(self, entreprise: Dict) -> Optional[Dict]:
+        """✅ CORRIGÉ: Plus de génération de données INSEE factices"""
+        print(f"      ⚪ Enrichissement INSEE désactivé pour éviter les faux positifs")
+        return None
+
+    def _enrichir_donnees_insee(self, commune: str, secteur_naf: str, thematique: str) -> List[Dict]:
+        """✅ CORRIGÉ: Plus d'enrichissement INSEE factice"""
+        print(f"          ⚪ Enrichissement INSEE désactivé")
+        return []
     
     def _extraire_mots_cles_cibles(self, resultats: List[Dict], thematique: str) -> List[str]:
         """✅ CORRIGÉ : Extraction des vrais mots-clés trouvés"""

@@ -13,6 +13,8 @@ traitement:
 # Paramètres de scoring - ÉQUILIBRÉS pour PME
 scoring:
   seuil_pertinence_minimum: 0.4  # ✅ RELEVÉ de 0.15 à 0.4
+  seuil_validation_url: 0.8      # URLs doivent être très fiables
+  seuil_contenu_substantiel: 50
   poids_source_officielle: 1.0
   poids_presse_locale: 0.9       
   poids_web_general: 0.6         # ✅ RÉDUIT de 0.7 à 0.6
@@ -25,6 +27,11 @@ validation:
   score_commune_bonus: 0.2       
   score_thematique_minimum: 0.2   # ✅ RELEVÉ de 0.05 à 0.2
   exclusions_strictes: true       # ✅ ACTIVÉ au lieu de false
+  desactiver_simulation: true          # Désactive les simulations
+  desactiver_enrichissement_insee: true  # Désactive enrichissement factice
+  desactiver_donnees_sectorielles: true  # Désactive données sectorielles factices
+  score_minimum_reel: 0.6             # Score minimum pour considérer contenu réel
+  validation_urls_stricte: true
 
 # 📊 Seuils PME (équilibrés)
 seuils_pme:
@@ -50,6 +57,24 @@ exclusions:
     - "cours de français"
     - "définition"
     - "forum.wordreference"
+
+# ✅ EXCLUSIONS STRICTES
+exclusions_contenu:
+  mots_factices:
+    - "information concernant"
+    - "données contextuelles"
+    - "activité économique locale"
+    - "développement de l'activité"
+    - "services aux habitants"
+    - "contexte entreprise"
+  
+  urls_factices:
+    - "exemple.fr"
+    - "exemple-local.fr"
+    - "test.fr"
+    - "demo.fr"
+    - "simulation.fr"
+    - "salon-lagny-sur-marne.fr"
 
 # Mots-clés AFFINÉS pour PME locales (qualité > quantité)
 mots_cles:

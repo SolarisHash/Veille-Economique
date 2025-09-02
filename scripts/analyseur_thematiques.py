@@ -297,34 +297,42 @@ class AnalyseurThematiques:
         print("🐛 FIN DEBUG FORMAT\n")
 
     def _calculer_score_avec_vos_donnees(self, donnees: Dict, thematique: str) -> float:
-        """✅ CORRIGÉ: Calcul de score plus exigeant"""
+        """✅ CORRIGÉ: Calcul de score avec validation renforcée"""
         score_total = 0.0
         
         print(f"           🔍 Analyse RENFORCÉE {thematique}")
         print(f"           📊 Données reçues: {list(donnees.keys())}")
         
-        # 1. Score pertinence (réduit)
+        # 1. Score pertinence (avec validation)
         if 'pertinence' in donnees:
             pertinence_brute = donnees['pertinence']
-            # ✅ Plus conservateur
-            score_pertinence = min(pertinence_brute * 0.8, 0.6)  # Réduit le multiplicateur
+            # ✅ VALIDATION: Si pertinence suspecte → réduction
+            if pertinence_brute > 0.9:  # Score trop parfait = suspect
+                score_pertinence = min(pertinence_brute * 0.5, 0.4)  # Forte réduction
+                print(f"           ⚠️ Pertinence suspecte réduite: {pertinence_brute} → {score_pertinence}")
+            else:
+                score_pertinence = min(pertinence_brute * 0.8, 0.6)
             score_total += score_pertinence
-            print(f"           🎯 Pertinence: {pertinence_brute} → {score_pertinence}")
         
-        # 2. Score mots-clés (réduit)
+        # 2. Score mots-clés (validation renforcée)
         if 'mots_cles_trouves' in donnees:
             mots_cles = donnees['mots_cles_trouves']
             if isinstance(mots_cles, list) and len(mots_cles) > 0:
-                score_mots_cles = min(len(mots_cles) * 0.1, 0.3)  # Réduit de 0.15 à 0.1
-                score_total += score_mots_cles
-                print(f"           🔑 Mots-clés ({len(mots_cles)}): +{score_mots_cles}")
+                # ✅ Validation des mots-clés
+                mots_valides = [mc for mc in mots_cles if self._mot_cle_valide(mc, thematique)]
+                if mots_valides:
+                    score_mots_cles = min(len(mots_valides) * 0.1, 0.3)
+                    score_total += score_mots_cles
+                    print(f"           🔑 Mots-clés valides ({len(mots_valides)}/{len(mots_cles)}): +{score_mots_cles}")
+                else:
+                    print(f"           ❌ Aucun mot-clé valide")
         
-        # 3. Score extraits (avec validation qualité)
+        # 3. Score extraits (avec validation qualité STRICTE)
         if 'extraits_textuels' in donnees:
             extraits = donnees['extraits_textuels']
             if isinstance(extraits, list) and len(extraits) > 0:
-                # ✅ VALIDATION QUALITÉ DES EXTRAITS
-                extraits_valides = self._valider_qualite_extraits(extraits, thematique)
+                # ✅ VALIDATION STRICTE DES EXTRAITS
+                extraits_valides = self._valider_extraits_stricts(extraits, thematique)
                 if extraits_valides:
                     score_extraits = min(len(extraits_valides) * 0.15, 0.4)
                     score_total += score_extraits
@@ -332,11 +340,74 @@ class AnalyseurThematiques:
                 else:
                     print(f"           ❌ Aucun extrait de qualité suffisante")
         
-        # Score final plus conservateur
-        score_final = min(score_total, 0.8)  # Limite à 0.8 au lieu de 0.9
-        print(f"           🏆 Score final RENFORCÉ: {score_final}")
+        # Score final conservateur
+        score_final = min(score_total, 0.7)  # Maximum abaissé à 0.7
+        print(f"           🏆 Score final VALIDÉ: {score_final}")
         
         return score_final
+
+    def _mot_cle_valide(self, mot_cle: str, thematique: str) -> bool:
+        """✅ NOUVEAU: Validation des mots-clés"""
+        if not isinstance(mot_cle, str) or len(mot_cle) < 3:
+            return False
+        
+        # Mots-clés factices à rejeter
+        mots_factices = ['test', 'exemple', 'demo', 'simulation', 'contexte', 'général']
+        
+        if mot_cle.lower() in mots_factices:
+            return False
+        
+        # Le mot-clé doit être lié à la thématique
+        mots_thematiques = self.thematiques_mots_cles.get(thematique, [])
+        if mots_thematiques:
+            return any(mot.lower() in mot_cle.lower() for mot in mots_thematiques)
+        
+        return True
+
+    def _valider_extraits_stricts(self, extraits: List[Dict], thematique: str) -> List[Dict]:
+        """✅ NOUVEAU: Validation stricte des extraits"""
+        extraits_valides = []
+        
+        for extrait in extraits:
+            if not isinstance(extrait, dict):
+                continue
+            
+            titre = extrait.get('titre', '').lower()
+            description = extrait.get('description', '').lower()
+            url = extrait.get('url', '').lower()
+            
+            texte_complet = f"{titre} {description}"
+            
+            # ❌ EXCLUSIONS STRICTES
+            exclusions = [
+                'information concernant', 'données contextuelles', 'activité économique locale',
+                'développement de l\'activité', 'services aux habitants', 'exemple.fr',
+                'exemple-local.fr', 'contexte entreprise', 'simulation'
+            ]
+            
+            if any(exclusion in texte_complet for exclusion in exclusions):
+                continue
+            
+            # ❌ EXCLUSION URLs factices
+            if any(factice in url for factice in ['exemple', 'test', 'demo', 'simulation']):
+                continue
+            
+            # ✅ VALIDATION CONTENU SUBSTANTIEL
+            if len(titre) < 10 and len(description) < 30:
+                continue
+            
+            # ✅ VALIDATION LIEN THÉMATIQUE
+            mots_thematiques = self.thematiques_mots_cles.get(thematique, [])
+            if mots_thematiques:
+                if not any(mot.lower() in texte_complet for mot in mots_thematiques):
+                    # Fallback: mots business généraux
+                    mots_business = ['entreprise', 'société', 'activité', 'service']
+                    if not any(mot in texte_complet for mot in mots_business):
+                        continue
+            
+            extraits_valides.append(extrait)
+        
+        return extraits_valides
 
 
     def _analyser_extraits_vos_donnees(self, extraits: List[Dict], thematique: str) -> float:

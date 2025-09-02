@@ -859,11 +859,16 @@ class GenerateurRapports:
         return html
 
     def _generer_section_entreprises_sans_scores(self, entreprises: List[Dict]) -> str:
-        """✅ Section entreprises HTML SANS SCORES - Seulement les actives"""
+        """✅ CORRIGÉ: Section entreprises HTML avec filtrage contenu factice"""
         html = ""
         
-        # ✅ FILTRAGE : Seulement entreprises actives
-        entreprises_actives = [e for e in entreprises if e.get('score_global', 0) > 0.1]
+        # ✅ FILTRAGE : Seulement entreprises actives avec VRAI contenu
+        entreprises_actives = []
+        for e in entreprises:
+            if e.get('score_global', 0) > 0.1:
+                # Vérification que ce n'est pas du contenu factice
+                if self._a_contenu_reel(e):
+                    entreprises_actives.append(e)
         
         # Tri par nom au lieu de score
         entreprises_triees = sorted(entreprises_actives, key=lambda x: x.get('nom', ''))
@@ -884,7 +889,7 @@ class GenerateurRapports:
                 </div>
             """
             
-            # ✅ DÉTAILS PAR THÉMATIQUE SANS SCORES
+            # ✅ DÉTAILS PAR THÉMATIQUE AVEC FILTRAGE CONTENU FACTICE
             analyse = entreprise.get('analyse_thematique', {})
             thematiques_trouvees = [t for t in self.thematiques if t in analyse and analyse[t].get('trouve', False)]
             
@@ -904,52 +909,49 @@ class GenerateurRapports:
                         </h5>
                     """
                     
-                    # Extraction des informations détaillées SANS SCORES
+                    # ✅ EXTRACTION INFORMATIONS RÉELLES UNIQUEMENT
                     details_info = []
-                    liens_sources = []
                     
                     for detail in result.get('details', []):
                         info = detail.get('informations', {})
                         
-                        # Extraits textuels avec sources
+                        # Extraits textuels avec VALIDATION
                         if 'extraits_textuels' in info:
                             for extrait in info['extraits_textuels']:
-                                details_info.append({
-                                    'type': 'web',
-                                    'titre': extrait.get('titre', ''),
-                                    'contenu': extrait.get('description', ''),
-                                    'url': extrait.get('url', '')
-                                })
+                                if self._est_extrait_reel(extrait):
+                                    details_info.append({
+                                        'type': 'web',
+                                        'titre': extrait.get('titre', ''),
+                                        'contenu': extrait.get('description', ''),
+                                        'url': extrait.get('url', '')
+                                    })
                     
-                    # Affichage des détails SANS SCORES
+                    # Affichage seulement si contenu réel trouvé
                     if details_info:
                         html += "<div style='margin-top: 10px;'>"
                         
                         for i, detail in enumerate(details_info[:3], 1):
-                            icon = "🌐" if detail['type'] == 'web' else "📱"
-                            
-                            html += f"""
-                            <div style="margin: 8px 0; padding: 8px; background-color: white; border-radius: 4px;">
-                                <div style="font-weight: bold; color: #34495e;">
-                                    {icon} {detail['titre']}
-                                </div>
-                                <div style="margin: 5px 0; color: #2c3e50;">
-                                    {detail['contenu'][:300]}{'...' if len(detail['contenu']) > 300 else ''}
-                                </div>
-                            """
-                            
-                            if detail['url']:
+                            # Validation URL avant affichage
+                            if self._url_est_valide(detail['url']):
                                 html += f"""
-                                <div style="margin-top: 5px;">
-                                    <a href="{detail['url']}" target="_blank" style="color: #3498db; text-decoration: none; font-size: 0.9em;">
-                                        🔗 Voir la source
-                                    </a>
+                                <div style="margin: 8px 0; padding: 8px; background-color: white; border-radius: 4px;">
+                                    <div style="font-weight: bold; color: #34495e;">
+                                        🌐 {detail['titre']}
+                                    </div>
+                                    <div style="margin: 5px 0; color: #2c3e50;">
+                                        {detail['contenu'][:300]}{'...' if len(detail['contenu']) > 300 else ''}
+                                    </div>
+                                    <div style="margin-top: 5px;">
+                                        <a href="{detail['url']}" target="_blank" style="color: #3498db; text-decoration: none; font-size: 0.9em;">
+                                            🔗 Voir la source
+                                        </a>
+                                    </div>
                                 </div>
                                 """
-                            
-                            html += "</div>"
                         
                         html += "</div>"
+                    else:
+                        html += "<div style='color: #666; font-style: italic;'>Activité détectée mais sources non accessibles</div>"
                     
                     html += "</div>"  # Fin de la thématique
                 
@@ -969,6 +971,75 @@ class GenerateurRapports:
             html += "</div>"  # Fin de l'entreprise
             
         return html
+
+    def _a_contenu_reel(self, entreprise: Dict) -> bool:
+        """✅ NOUVEAU: Vérifie qu'une entreprise a du vrai contenu"""
+        analyse = entreprise.get('analyse_thematique', {})
+        
+        for thematique_data in analyse.values():
+            if thematique_data.get('trouve', False):
+                details = thematique_data.get('details', [])
+                
+                for detail in details:
+                    info = detail.get('informations', {})
+                    extraits = info.get('extraits_textuels', [])
+                    
+                    for extrait in extraits:
+                        if self._est_extrait_reel(extrait):
+                            return True
+        
+        return False
+
+    def _est_extrait_reel(self, extrait: Dict) -> bool:
+        """✅ NOUVEAU: Détermine si un extrait est réel ou factice"""
+        titre = extrait.get('titre', '').lower()
+        description = extrait.get('description', '').lower()
+        url = extrait.get('url', '').lower()
+        
+        # Indicateurs de contenu factice
+        indicateurs_factices = [
+            'information concernant',
+            'données contextuelles', 
+            'activité économique locale',
+            'développement de l\'activité',
+            'services aux habitants',
+            'exemple.fr',
+            'exemple-local.fr',
+            'contexte entreprise'
+        ]
+        
+        texte_complet = f"{titre} {description}"
+        
+        # Si contient des indicateurs factices → FAUX
+        if any(indic in texte_complet for indic in indicateurs_factices):
+            return False
+        
+        # Si URL factice → FAUX
+        if any(factice in url for factice in ['exemple', 'test', 'demo', 'simulation']):
+            return False
+        
+        # Si contenu trop court → FAUX
+        if len(titre) < 10 and len(description) < 20:
+            return False
+        
+        return True
+
+    def _url_est_valide(self, url: str) -> bool:
+        """✅ NOUVEAU: Vérifie qu'une URL est valide (pas factice)"""
+        if not url or not url.startswith('http'):
+            return False
+        
+        # URLs factices connues
+        urls_factices = [
+            'exemple.fr',
+            'exemple-local.fr', 
+            'test.fr',
+            'demo.fr',
+            'simulation.fr',
+            'salon-lagny-sur-marne.fr'  # URL générée par le système
+        ]
+        
+        return not any(factice in url.lower() for factice in urls_factices)
 
     def generer_export_json(self, entreprises_enrichies: List[Dict]) -> str:
         """Export des données en format JSON avec gestion des types non sérialisables"""
