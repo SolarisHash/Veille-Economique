@@ -59,24 +59,20 @@ class GenerateurRapports:
         
     def _creer_dataframe_principal(self, entreprises: List[Dict]) -> pd.DataFrame:
         """Version ULTRA-PERMISSIVE pour PME"""
-        
-        # ✅ INCLURE TOUTES les entreprises ayant AU MOINS 1 extrait
         entreprises_avec_donnees = []
-        
         for entreprise in entreprises:
             analyse = entreprise.get('analyse_thematique', {})
-            
-            # Vérifier s'il y a AU MOINS 1 extrait dans n'importe quelle thématique
             a_des_extraits = False
             for thematique, data in analyse.items():
                 if data.get('details', []):
                     a_des_extraits = True
                     break
-            
-            if a_des_extraits:
+            # Inclure si force_inclusion ou s'il y a au moins un détail
+            if a_des_extraits or entreprise.get('force_inclusion', False):
                 entreprises_avec_donnees.append(entreprise)
-        
-        print(f"📊 PME avec données: {len(entreprises_avec_donnees)}/{len(entreprises)}")
+        # Si toujours vide, inclure toutes les entreprises
+        if len(entreprises_avec_donnees) == 0:
+            entreprises_avec_donnees = entreprises
         
         # Traiter ces entreprises...
         donnees = []

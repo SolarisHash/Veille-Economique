@@ -1,298 +1,100 @@
-# Configuration optimisée pour améliorer le taux de détection
+# Configuration ULTRA-PERMISSIVE pour PME locales - CORRIGÉE
 
-# Paramètres de traitement - ASSOUPLIS
+# Paramètres de traitement - ASSOUPLIS POUR PME
 traitement:
   echantillon_test: 20
-  periode_recherche_mois: 12  # Élargi à 12 mois
-  timeout_requetes_sec: 15    # Augmenté pour plus de stabilité
-  delai_entre_requetes_sec: 3 # Augmenté pour éviter les blocages
-  seuil_validation_minimum: 0.45  # Augmenté de 0.2 à 0.45
+  periode_recherche_mois: 12  
+  timeout_requetes_sec: 15    
+  delai_entre_requetes_sec: 3 
+  seuil_validation_minimum: 0.1  # ✅ ABAISSÉ de 0.45 à 0.1
 
-# Paramètres de scoring - PLUS PERMISSIFS
+# Paramètres de scoring - ULTRA-PERMISSIFS POUR PME
 scoring:
-  seuil_pertinence_minimum: 0.4  # Seuil relevé pour plus de rigueur
+  seuil_pertinence_minimum: 0.15  # ✅ ABAISSÉ de 0.4 à 0.15
   poids_source_officielle: 1.0
-  poids_presse_locale: 0.9       # AUGMENTÉ
-  poids_web_general: 0.7         # AUGMENTÉ
-  bonus_recence: 0.3             # AUGMENTÉ
-  bonus_source_multiple: 0.2     # AUGMENTÉ
+  poids_presse_locale: 0.9       
+  poids_web_general: 0.7         
+  bonus_recence: 0.3             
+  bonus_source_multiple: 0.2     
 
-# Mots-clés ENRICHIS pour meilleure détection
+# Paramètres validation ULTRA-ASSOUPLIS pour PME
+validation:
+  score_entreprise_minimum: 0.1  # ✅ ABAISSÉ de 0.4 à 0.1
+  score_commune_bonus: 0.2       
+  score_thematique_minimum: 0.05 # ✅ ABAISSÉ de 0.1 à 0.05
+  exclusions_strictes: false     
+
+# 📊 Seuils PME (ultra-permissifs)
+seuils_pme:
+  validation_minimum: 0.1    # ✅ ABAISSÉ de 0.45 à 0.1
+  score_entreprise_minimum: 0.1  # ✅ COHÉRENT à 0.1
+
+# Mots-clés ENRICHIS pour PME locales
 mots_cles:
   recrutements:
-    - "recrutement"
+    - "cherche"
+    - "recherche" 
     - "recrute"
     - "embauche"
     - "offre emploi"
-    - "offres emploi"
-    - "CDI"
-    - "CDD" 
-    - "stage"
-    - "alternance"
-    - "apprentissage"
-    - "carrière"
+    - "apprenti"
+    - "stagiaire"
+    - "candidat"
     - "poste"
-    - "candidature"
-    - "nous recherchons"
-    - "rejoindre équipe"
-    - "opportunité"
     
   evenements:
-    - "événement"
-    - "événements"
-    - "porte ouverte"
-    - "portes ouvertes"
-    - "journée porte ouverte"
-    - "conférence"
-    - "salon"
-    - "forum"
-    - "rencontre"
-    - "manifestation"
-    - "colloque"
-    - "séminaire"
-    - "présentation"
-    - "démonstration"
+    - "ouverture"
+    - "nouveau"
     - "inauguration"
+    - "porte ouverte"
+    - "événement"
+    - "manifestation"
+    - "salon"
+    - "exposition"
     
   innovations:
-    - "innovation"
-    - "nouveau"
-    - "nouveau produit"
     - "nouveau service"
-    - "lancement"
-    - "R&D"
-    - "recherche développement"
-    - "technologie"
-    - "modernisation"
-    - "amélioration"
-    - "développement"
-    - "créativité"
-    - "avancée"
-    - "progrès"
+    - "améliore"
+    - "modernise"
+    - "innovation"
+    - "développe"
+    - "rénove"
+    - "équipe"
+    - "investit"
     
   vie_entreprise:
     - "développement"
-    - "expansion"
-    - "croissance"
+    - "expansion" 
     - "partenariat"
-    - "collaboration"
-    - "implantation"
     - "ouverture"
+    - "agrandit"
+    - "déménage"
+    - "reprend"
     - "installation"
-    - "projet"
-    - "investissement"
-    - "stratégie"
-    - "évolution"
-    - "transformation"
 
-# Stratégies de recherche MULTIPLES
-strategies_recherche:
-  prioritaires:
-    - "nom_exact_thematique"      # "Entreprise XYZ" recrutement
-    - "nom_commune_thematique"    # "Entreprise XYZ" Ville emploi
-    - "mots_cles_commune"         # Mots-clés Ville secteur
-    
-  fallback:
-    - "secteur_commune_thematique" # Secteur Ville thématique
-    - "commune_thematique_generale" # Ville thématique générale
-
-# Paramètres validation ASSOUPLIS
-validation:
-  score_entreprise_minimum: 0.4  # Rehaussé pour fiabilité
-  score_commune_bonus: 0.2       # Bonus si commune mentionnée
-  score_thematique_minimum: 0.1  # RÉDUIT
-  exclusions_strictes: false     # ASSOUPLI
-  
-# Sources autorisées ÉLARGIES
-sources_autorisees:
-  sites_entreprise: true
-  presse_locale: true
-  presse_nationale: true
-  sites_institutionnels: true
-  portails_emploi: true
-  sites_sectoriels: true
-  reseaux_sociaux: true          # AJOUTÉ
-  forums_professionnels: false   # Gardé à false pour qualité
-
-# 🎯 NOUVEAUTÉ : Votre territoire spécifique
+# TERRITOIRE (gardé identique)
 territoire:
   codes_postaux_cibles:
-  # Zone principale Bussy-Saint-Georges / Marne-la-Vallée
   - "77600"  # Bussy-Saint-Georges
   - "77700"  # Serris, Chessy, Coupvray
-  - "77400"  # Lagny-sur-Marne, Thorigny-sur-Marne
-  
-  # Zone élargie Est Seine-et-Marne (15-20km)
-  - "77000"  # Melun, Vaux-le-Pénil
+  - "77400"  # Lagny-sur-Marne
+  - "77000"  # Melun
   - "77300"  # Fontainebleau
   - "77500"  # Chelles
   - "77200"  # Torcy
   - "77100"  # Meaux
-  - "77160"  # Provins
-  - "77250"  # Moret-Loing-et-Orvanne
-  - "77140"  # Nemours
-  
-  # Codes spécifiques communes proches
-  - "77058"  # Bussy-Saint-Martin
-  - "77059"  # Carnetin
-  - "77062"  # Chalifert
-  - "77075"  # Chanteloup-en-Brie
-  - "77085"  # Collégien
-  - "77121"  # Conches-sur-Gondoire
-  - "77124"  # Dampmart
-  - "77155"  # Ferrières-en-Brie
-  - "77181"  # Gouvernes
-  - "77209"  # Guermantes
-  - "77221"  # Jablines
-  - "77234"  # Jossigny
-  - "77237"  # Lesches
-  - "77243"  # Montevrain
-  - "77248"  # Pomponne
-  - "77307"  # Pontcarré
-  - "77372"  # Saint-Thibault-des-Vignes
-  - "77374"  # Thorigny-sur-Marne
-  - "77438"  # Bailly-Romainvilliers
-  - "77464"  # Val-d'Europe
-  
-  # Zone élargie proche Paris (77 limitrophe)
-  - "77290"  # Mitry-Mory
-  - "77410"  # Claye-Souilly
-  - "77450"  # Esbly
-  - "77470"  # Trilport
-  - "77480"  # Bray-sur-Seine
-  - "77490"  # Pontault-Combault
-  - "77550"  # Moissy-Cramayel
-  - "77600"  # Bussy-Saint-Georges (déjà listé)
-  - "77610"  # Fontenay-Trésigny
-  - "77630"  # Barbizon
-  - "77650"  # Longjumeau
-  - "77680"  # Roissy-en-Brie
-  - "77690"  # Montigny-sur-Loing
-  
-  # Codes postaux petite couronne proche (limites 77)
-  - "93160"  # Noisy-le-Grand (limite 77)
-  - "93410"  # Vaujours (proche 77)
-  - "94440"  # Villecresnes (limite 77)
-  - "94320"  # Thiais (proche)
-  
-  # Zone sud 77 (Sénart, Évry proche)
-  - "77127"  # Lieusaint
-  - "77176"  # Savigny-le-Temple
-  - "77190"  # Dammarie-les-Lys
-  - "77230"  # Moussy-le-Neuf
-  - "77260"  # La Ferté-sous-Jouarre
-  - "77270"  # Villeparisis
-  - "77280"  # Othis
-  - "77350"  # Le Mée-sur-Seine
-  - "77360"  # Vaires-sur-Marne
-  - "77380"  # Combs-la-Ville
-  - "77390"  # Verneuil-l'Étang
-  
-  # Zone nord-est 77 (Coulommiers, etc.)
-  - "77120"  # Coulommiers
-  - "77130"  # Montereau-Fault-Yonne
-  - "77150"  # Lésigny
-  - "77170"  # Brie-Comte-Robert
-  - "77180"  # Roissy-en-Brie
-  - "77220"  # Gretz-Armainvilliers
-  - "77240"  # Cesson
-  - "77330"  # Ozoir-la-Ferrière
-  - "77340"  # Pontault-Combault
-  - "77420"  # Champs-sur-Marne
-  - "77430"  # Champagne-sur-Seine
-  - "77440"  # Lizy-sur-Ourcq
-  - "77460"  # Souppes-sur-Loing
 
 communes_prioritaires:
-  # Zone principale Marne-la-Vallée
   - "Bussy-Saint-Georges"
-  - "Serris"
+  - "Serris" 
   - "Chessy"
-  - "Coupvray"
-  - "Bailly-Romainvilliers"
-  - "Val-d'Europe"
-  - "Montevrain"
-  
-  # Communes historiques importantes
   - "Meaux"
   - "Melun"
-  - "Fontainebleau"
-  - "Provins"
-  - "Coulommiers"
-  - "Nemours"
   - "Chelles"
   - "Torcy"
   - "Lagny-sur-Marne"
-  
-  # Communes territoire direct
-  - "Bussy-Saint-Martin"
-  - "Carnetin"
-  - "Chalifert"
-  - "Chanteloup-en-Brie"
-  - "Collégien"
-  - "Conches-sur-Gondoire"
-  - "Dampmart"
-  - "Ferrières-en-Brie"
-  - "Gouvernes"
-  - "Guermantes"
-  - "Jablines"
-  - "Jossigny"
-  - "Lesches"
-  - "Pomponne"
-  - "Pontcarré"
-  - "Saint-Thibault-des-Vignes"
-  - "Thorigny-sur-Marne"
-  
-  # Communes proches importantes
-  - "Esbly"
-  - "Trilport"
-  - "Claye-Souilly"
-  - "Mitry-Mory"
-  - "Vaires-sur-Marne"
-  - "Champs-sur-Marne"
-  - "Noisy-le-Grand"
-  - "Roissy-en-Brie"
-  - "Pontault-Combault"
-  - "Ozoir-la-Ferrière"
-  - "Brie-Comte-Robert"
-  - "Gretz-Armainvilliers"
-  
-  # Zone Sénart / Sud 77
-  - "Lieusaint"
-  - "Savigny-le-Temple"
-  - "Combs-la-Ville"
-  - "Dammarie-les-Lys"
-  - "Le Mée-sur-Seine"
-  - "Verneuil-l'Étang"
-  - "Cesson"
-  - "Vert-Saint-Denis"
-  - "Moissy-Cramayel"
-  
-  # Communes rurales mais actives économiquement
-  - "Moret-Loing-et-Orvanne"
-  - "La Ferté-sous-Jouarre"
-  - "Montereau-Fault-Yonne"
-  - "Villeparisis"
-  - "Fontenay-Trésigny"
-  - "Lésigny"
-  - "Champeaux"
-  - "Nangis"
-  - "Rebais"
-  - "Donnemarie-Dontilly"
-  
-  # Nouvelles communes intégrées
-  - "Crécy-la-Chapelle"
-  - "Tournan-en-Brie"
-  - "Roissy-en-Brie"
-  - "Mandres-les-Roses"
-  - "Villecresnes"
-  - "Santeny"
-  - "Marolles-en-Brie"
-  - "Boussy-Saint-Antoine"
-  - "Brunoy"
-  - "Yerres"
-    
-# 🏢 Critères PME spécifiques
+
+# 🏢 Critères PME spécifiques (très permissifs)
 filtrage_pme:
   effectif_max: 249
   secteurs_prioritaires:
@@ -301,55 +103,12 @@ filtrage_pme:
     - "construction"
     - "services"
     - "artisanat"
+    - "santé"
+    - "transport"
 
-# 📊 Seuils PME (plus permissifs)
-seuils_pme:
-  validation_minimum: 0.45    # Rehaussé pour plus d'exigence
-  score_entreprise_minimum: 0.4  # Cohérent avec la validation générale
-
-
-
-# Configuration Google Search (PRUDENTE)
-google_search:
-  enabled: true                    # Activer Google
-  priority: 4                      # Dernière priorité (après Bing, Yandex, DuckDuckGo)
-  daily_limit: 50                  # Maximum 50 requêtes/jour
-  min_delay_seconds: 30            # Minimum 30s entre requêtes
-  smart_delays: true               # Délais adaptatifs selon succès
-  block_on_detection: true         # Blocage auto si détection
-  block_duration_hours: 2          # Durée blocage en cas de détection
-  
-  # Conditions d'activation
-  activation_conditions:
-    other_engines_failed: 3        # Si 3+ autres moteurs échouent
-    min_quality_threshold: 2       # Si <2 résultats des autres moteurs
-    enterprise_queries_only: true  # Seulement requêtes d'entreprise
-  
-  # Protection anti-détection
-  protection:
-    rotate_user_agents: true
-    randomize_delays: true
-    respect_rate_limits: true
-    use_french_domain: true        # google.fr plus permissif
-    limit_results_per_query: 8     # Moins suspect que 10+
-    
-# Ordre des moteurs (GOOGLE EN DERNIER)
+# MOTEURS DE RECHERCHE (ordre de préférence)
 search_engines_priority:
-  1: "bing"           # Premier choix - stable et performant
-  2: "yandex"         # Deuxième choix - bon backup
-  3: "duckduckgo"     # Troisième choix - fiable
-  4: "google"         # DERNIER RECOURS - efficace mais risqué
-  5: "simulation"     # Fallback final
-
-# Seuils de qualité par moteur
-quality_thresholds:
-  bing: 3             # Minimum 3 résultats pour valider
-  yandex: 2           # Minimum 2 résultats
-  duckduckgo: 2       # Minimum 2 résultats  
-  google: 1           # Minimum 1 résultat (car dernier recours)
-  
-# Monitoring et alertes
-monitoring:
-  log_google_usage: true
-  alert_on_blocks: true
-  daily_reports: true
+  1: "bing"
+  2: "duckduckgo" 
+  3: "yandex"
+  4: "simulation"  # Fallback final

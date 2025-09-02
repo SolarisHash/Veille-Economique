@@ -614,17 +614,13 @@ class AIValidationModule:
         )
 
     def batch_validate_results(self, entreprise: Dict, results_by_theme: Dict) -> Dict[str, List[Dict]]:
-        """✅ VALIDATION ULTRA-PERMISSIVE pour PME"""
+        """Validation ultra-permissive pour PME"""
         validated_results = {}
-        
         for theme, extraits in results_by_theme.items():
             validated_results[theme] = []
-            
             if isinstance(extraits, dict):
                 extraits = extraits.get('extraits_textuels', [])
-            
-            # ✅ FORCER L'ACCEPTATION de tous les extraits pour PME
-            for extrait in extraits[:3]:  # Garder les 3 premiers
+            for extrait in extraits[:3]:  # Prendre les 3 premiers
                 if isinstance(extrait, dict):
                     extrait.update({
                         'ai_validated': True,
@@ -633,7 +629,6 @@ class AIValidationModule:
                         'confidence_fallback': 0.6
                     })
                     validated_results[theme].append(extrait)
-        
         return validated_results
 
     def get_usage_stats(self) -> Dict:

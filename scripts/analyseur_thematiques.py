@@ -18,8 +18,11 @@ class AnalyseurThematiques:
         """Initialisation de l'analyseur avec TOUS les mots-clés"""
         self.thematiques = thematiques_config
         self.config = self._charger_config_mots_cles()
-        self.seuil_pertinence = 0.5  # ✅ SEUIL ABAISSÉ
+        self.seuil_pertinence = 0.1  # ✅ ULTRA-PERMISSIF pour PME
         self.periode_recente = timedelta(days=30)
+        
+        # ✅ AJOUT: Auto-adaptation pour PME
+        self.adapter_seuils_pour_pme()
         
         # ✅ AJOUT CRITIQUE : Définition des mots-clés thématiques
         self.thematiques_mots_cles = {
@@ -65,6 +68,19 @@ class AnalyseurThematiques:
                 return config.get('mots_cles', {})
         except FileNotFoundError:
             return self._config_mots_cles_defaut()
+            
+    def adapter_seuils_pour_pme(self):
+        """✅ NOUVELLE MÉTHODE: Adaptation automatique des seuils pour PME"""
+        print("🔧 Adaptation des seuils pour PME locales")
+        
+        # Seuils ultra-permissifs pour PME
+        self.seuil_pertinence = 0.1
+        self.seuil_entreprise_minimum = 0.1  
+        self.seuil_score_global = 0.05
+        
+        print(f"   ✅ Seuil pertinence: {self.seuil_pertinence}")
+        print(f"   ✅ Seuil entreprise: {self.seuil_entreprise_minimum}")
+        print(f"   ✅ Seuil score global: {self.seuil_score_global}")
             
     def _config_mots_cles_defaut(self) -> Dict:
         """Configuration par défaut des mots-clés"""
@@ -1044,20 +1060,22 @@ class AnalyseurThematiques:
                 continue
         
         # Statistiques de détection
-        entreprises_actives = [e for e in entreprises_enrichies if e.get('score_global', 0) > 0.05]  # Seuil ultra-bas
-        entreprises_tres_actives = [e for e in entreprises_enrichies if e.get('score_global', 0) > 0.5]
+        entreprises_actives = [e for e in entreprises_enrichies if e.get('score_global', 0) > 0.05]  # ✅ Seuil ultra-bas PME
+        entreprises_tres_actives = [e for e in entreprises_enrichies if e.get('score_global', 0) > 0.3]  # ✅ Adapté PME
         
         print(f"✅ Analyse terminée pour {len(entreprises_enrichies)} entreprises")
-        print(f"🎯 Entreprises actives (>0.2): {len(entreprises_actives)}")
-        print(f"🏆 Entreprises très actives (>0.5): {len(entreprises_tres_actives)}")
+        print(f"🎯 Entreprises actives (>0.05): {len(entreprises_actives)}")
+        print(f"🏆 Entreprises très actives (>0.3): {len(entreprises_tres_actives)}")
         
         if len(entreprises_actives) > 0:
-            print("🎉 SUCCÈS : Entreprises détectées !")
+            print("🎉 SUCCÈS : Entreprises PME détectées !")
             for ent in entreprises_actives[:3]:
                 nom = ent.get('nom', 'N/A')
                 score = ent.get('score_global', 0)
                 themes = ent.get('thematiques_principales', [])
                 print(f"    • {nom}: {score:.3f} → {themes}")
+        else:
+            print("⚠️ AUCUNE entreprise PME détectée - seuils trop stricts ou problème données")
         
         return entreprises_enrichies
     

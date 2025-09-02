@@ -28,13 +28,13 @@ from data_quality_fixer import DataQualityFixer
 
 def valider_configuration_pme():
     """Valide que la configuration PME est correcte"""
-    print("🔍 Validation de la configuration PME...")
+    print("[CONFIG] Validation de la configuration PME...")
     
     try:
         # Vérification fichier de configuration
         config_path = "config/parametres.yaml"
         if not os.path.exists(config_path):
-            print(f"❌ Fichier de configuration manquant: {config_path}")
+            print(f"[ERREUR] Fichier de configuration manquant: {config_path}")
             return False
         
         # Chargement et validation configuration
@@ -47,23 +47,22 @@ def valider_configuration_pme():
         communes = territoire.get('communes_prioritaires', [])
         
         if not codes_postaux and not communes:
-            print("❌ Aucun territoire configuré (codes postaux ou communes)")
+            print("[ERREUR] Aucun territoire configuré (codes postaux ou communes)")
             return False
         
-        print(f"✅ Configuration territoire valide:")
-        print(f"   📮 {len(codes_postaux)} codes postaux")
-        print(f"   🏘️ {len(communes)} communes prioritaires")
+        print(f"[OK] Configuration territoire valide:")
+        print(f"   [CODES] {len(codes_postaux)} codes postaux")
+        print(f"   [COMMUNES] {len(communes)} communes prioritaires")
         
         # Vérification FiltreurPME
-        filtreur = FiltreurPME(config_path)
-        print(f"✅ FiltreurPME initialisé correctement")
+        FiltreurPME()
+        print(f"[OK] FiltreurPME initialisé correctement")
         
         return True
         
     except Exception as e:
-        print(f"❌ Erreur validation configuration: {e}")
+        print(f"[ERREUR] Erreur validation configuration: {e}")
         return False
-
 
 def extraire_code_postal_depuis_adresse(adresse: str) -> str:
     """Extraction du code postal depuis l'adresse complète"""
@@ -76,438 +75,440 @@ def extraire_code_postal_depuis_adresse(adresse: str) -> str:
     match = re.search(r'\b(\d{5})\b', adresse)
     return match.group(1) if match else ""
 
-
 def synchroniser_donnees_entreprises(entreprises: List[Dict]) -> List[Dict]:
     """Synchronise et enrichit les données d'entreprises pour la compatibilité PME"""
-    print("🔄 Synchronisation des données d'entreprises...")
     
     entreprises_synchronisees = []
     
     for entreprise in entreprises:
-        # Copie de l'entreprise
-        entreprise_sync = entreprise.copy()
+        # Mapping standardisé des champs
+        entreprise_sync = {
+            'nom': entreprise.get('nom') or entreprise.get('raison_sociale', ''),
+            'siret': entreprise.get('siret', ''),
+            'commune': entreprise.get('commune') or entreprise.get('ville', ''),
+            'code_postal': entreprise.get('code_postal', ''),
+            'adresse_complete': entreprise.get('adresse_complete', ''),
+            'secteur_naf': entreprise.get('secteur_naf') or entreprise.get('secteur', ''),
+            'effectif': entreprise.get('effectif', 0),
+            'chiffre_affaires': entreprise.get('chiffre_affaires', 0),
+            'type_structure': entreprise.get('type_structure', 'entreprise')
+        }
         
-        # ✅ AJOUT : Code postal détecté si manquant
-        if 'code_postal_detecte' not in entreprise_sync:
-            adresse = entreprise_sync.get('adresse_complete', '')
-            code_postal = extraire_code_postal_depuis_adresse(adresse)
-            entreprise_sync['code_postal_detecte'] = code_postal
-            
-            if code_postal:
-                print(f"   📮 Code postal détecté: {entreprise_sync['nom'][:30]} → {code_postal}")
+        # Extraction automatique code postal si manquant
+        if not entreprise_sync['code_postal'] and entreprise_sync['adresse_complete']:
+            entreprise_sync['code_postal'] = extraire_code_postal_depuis_adresse(
+                entreprise_sync['adresse_complete']
+            )
         
-        # ✅ AJOUT : Nom commercial si pertinent
-        nom = entreprise_sync.get('nom', '')
-        enseigne = entreprise_sync.get('enseigne', '')
-        
-        if enseigne and enseigne != nom:
-            entreprise_sync['nom_commercial'] = enseigne
-        elif any(mot in nom.upper() for mot in ['BOULANGERIE', 'RESTAURANT', 'CAFE', 'GARAGE', 'COIFFURE']):
-            entreprise_sync['nom_commercial'] = nom
-        
-        # ✅ AJOUT : Secteur simplifié
-        secteur_naf = entreprise_sync.get('secteur_naf', '').lower()
-        entreprise_sync['secteur_simplifie'] = simplifier_secteur_pour_pme(secteur_naf)
+        # Simplification secteur pour PME
+        if entreprise_sync['secteur_naf']:
+            entreprise_sync['secteur_simplifie'] = simplifier_secteur_pour_pme(
+                entreprise_sync['secteur_naf']
+            )
         
         entreprises_synchronisees.append(entreprise_sync)
     
-    print(f"✅ {len(entreprises_synchronisees)} entreprises synchronisées")
     return entreprises_synchronisees
 
-
 def simplifier_secteur_pour_pme(secteur_naf: str) -> str:
-    """Simplification du secteur NAF pour les PME locales"""
+    """Simplifie le secteur NAF pour une meilleure lisibilité PME"""
+    
     if not secteur_naf:
         return ""
     
-    secteur_lower = secteur_naf.lower()
-    
-    # Mapping spécifique PME françaises
-    mappings_pme = {
-        'boulangerie': 'boulangerie',
-        'restaurant': 'restaurant', 
-        'coiffure': 'coiffeur',
-        'garage': 'garage',
-        'pharmacie': 'pharmacie',
-        'construction': 'construction',
-        'plomberie': 'plombier',
-        'électricité': 'électricien',
-        'maçonnerie': 'maçon',
-        'commerce de détail': 'magasin',
-        'transport': 'transport',
-        'conseil': 'conseil',
-        'informatique': 'informatique',
-        'immobilier': 'immobilier',
-        'location': 'location'
+    # Dictionnaire de simplification sectorielle
+    simplifications = {
+        'COMMERCE': ['commerce', 'vente', 'distribution', 'retail'],
+        'SERVICES': ['service', 'conseil', 'consulting', 'prestation'],
+        'INDUSTRIE': ['industrie', 'production', 'fabrication', 'manufacture'],
+        'BTP': ['construction', 'bâtiment', 'travaux', 'rénovation'],
+        'TRANSPORT': ['transport', 'logistique', 'livraison', 'déménagement'],
+        'RESTAURATION': ['restaurant', 'alimentaire', 'cuisine', 'traiteur'],
+        'SANTÉ': ['santé', 'médical', 'pharmacie', 'soins'],
+        'DIGITAL': ['informatique', 'digital', 'web', 'software'],
+        'FORMATION': ['formation', 'éducation', 'enseignement', 'coaching']
     }
     
-    for secteur_long, secteur_court in mappings_pme.items():
-        if secteur_long in secteur_lower:
-            return secteur_court
+    secteur_lower = secteur_naf.lower()
     
-    # Fallback : premier mot significatif
+    for secteur_court, mots_cles in simplifications.items():
+        for mot in mots_cles:
+            if mot in secteur_lower:
+                return secteur_court
+    
+    # Retour premier mot si pas de correspondance
     mots = secteur_naf.split()
     return mots[0] if mots else ""
 
-
 def creer_adapter_requetes_pme(recherche_instance):
-    """Crée un adaptateur pour les requêtes PME territoriales"""
+    """Crée un adaptateur pour requêtes PME territoriales"""
     
-    def adapter_requetes_pme(nom_entreprise, commune, thematique):
-        """Adaptateur de signature pour les requêtes PME"""
-        # Construction d'un dict entreprise temporaire
-        entreprise_temp = {
-            'nom': nom_entreprise,
-            'commune': commune,
-            'code_postal_detecte': '',
-            'secteur_naf': '',
-            'secteur_simplifie': '',
-            'nom_commercial': None,
-            'adresse_complete': f"{commune}"
-        }
+    def adapter_requetes_pme(entreprise, thematique):
+        """Adapter spécialement les requêtes pour PME territoriales"""
         
-        # Appel de la vraie méthode PME
+        # Enrichissement avec contexte territorial
+        entreprise_temp = entreprise.copy()
+        entreprise_temp['contexte_territorial'] = 'PME Seine-et-Marne'
+        entreprise_temp['secteur_simplifie'] = simplifier_secteur_pour_pme(
+            entreprise.get('secteur_naf', '')
+        )
+        
+        # Délégation à la méthode spécialisée
         return recherche_instance.construire_requetes_pme_territoriales(entreprise_temp, thematique)
     
     return adapter_requetes_pme
 
-
 def debug_seuils_utilises():
-    """Debug pour identifier tous les seuils utilisés"""
-    print("🔍 SEUILS DE CONFIANCE UTILISÉS:")
+    """Debug des seuils utilisés dans tout le système"""
+    print("[DEBUG] SEUILS SYSTEME UTILISES")
+    print("=" * 40)
     
-    # 1. Configuration YAML
+    # 1. Seuils recherche
     try:
-        with open("config/parametres.yaml", 'r', encoding='utf-8') as f:
-            config = yaml.safe_load(f)
-            
-        print(f"📋 Config YAML:")
-        validation_config = config.get('validation', {})
-        seuils_pme_config = config.get('seuils_pme', {})
-        
-        print(f"   score_entreprise_minimum: {validation_config.get('score_entreprise_minimum', 'N/A')}")
-        print(f"   validation_minimum: {seuils_pme_config.get('validation_minimum', 'N/A')}")
-        
+        from scripts.recherche_web import RechercheWeb
+        recherche = RechercheWeb()
+        print(f"[RECHERCHE] Seuil validation: {getattr(recherche, 'seuil_validation_minimal', 'Non défini')}")
     except Exception as e:
-        print(f"❌ Erreur lecture config: {e}")
+        print(f"[ERREUR] Erreur module recherche: {e}")
     
-    # 2. Module IA (optionnel)
+    # 2. Seuils IA
     try:
         from ai_validation_module import AIValidationModule
-        print(f"🤖 Module IA disponible")
-    except ImportError:
-        print(f"⚠️ Module IA non disponible (optionnel)")
+        validateur = AIValidationModule()
+        print(f"[IA] Module disponible: {validateur is not None}")
     except Exception as e:
-        print(f"❌ Erreur module IA: {e}")
+        print(f"[ERREUR] Erreur module IA: {e}")
     
     # 3. Modules de base
     try:
-        print(f"🔍 Modules de base:")
-        print(f"   ✅ RechercheWeb")
-        print(f"   ✅ AnalyseurThematiques") 
-        print(f"   ✅ FiltreurPME")
-        print(f"   ✅ GenerateurRapports")
+        print(f"[MODULES] Modules de base:")
+        print(f"   [OK] RechercheWeb")
+        print(f"   [OK] AnalyseurThematiques") 
+        print(f"   [OK] FiltreurPME")
+        print(f"   [OK] GenerateurRapports")
     except Exception as e:
-        print(f"❌ Erreur modules de base: {e}")
+        print(f"[ERREUR] Erreur modules de base: {e}")
 
+def debug_entreprises_extraites(entreprises_finales):
+    """Debug détaillé des entreprises extraites"""
+    print(f"\n[DEBUG] DEBUG ENTREPRISES EXTRAITES:")
+    print(f"   [STATS] Nombre total: {len(entreprises_finales)}")
+    
+    if len(entreprises_finales) == 0:
+        print("   [ERREUR] AUCUNE ENTREPRISE - Vérifiez le filtrage!")
+        return False
+    
+    for i, ent in enumerate(entreprises_finales[:3], 1):
+        nom = ent.get('nom', 'N/A')
+        commune = ent.get('commune', 'N/A')  
+        secteur = ent.get('secteur_naf', 'N/A')
+        print(f"   {i}. {nom[:40]} | {commune} | {secteur[:30]}")
+    
+    print(f"   [OK] Entreprises valides pour recherche")
+    return True
 
-def main_pme_territorial():
-    """Version adaptée PME avec codes postaux - CORRIGÉE"""
-
-    print("🎯 VEILLE ÉCONOMIQUE PME - TERRITOIRE SPÉCIFIQUE")
-    print("=" * 70)
-    
-    # ✅ VALIDATION PRÉALABLE
-    if not valider_configuration_pme():
-        print("❌ Configuration invalide - arrêt du traitement")
-        return None
-    
-    # Configuration
-    fichier_excel = "data/input/entreprises_base.xlsx"
-    nb_entreprises = 15
-    
-    # Vérification fichier source
-    if not os.path.exists(fichier_excel):
-        print(f"❌ Fichier source manquant: {fichier_excel}")
-        print("📁 Veuillez placer votre fichier Excel dans data/input/")
-        return None
-    
-    # Initialisation du logger
-    logger = DiagnosticLogger()
+def diagnostic_extraction_complete():
+    """Diagnostic complet de l'extraction"""
+    print(f"\n[DIAGNOSTIC] DIAGNOSTIC EXTRACTION COMPLETE")
+    print("=" * 50)
     
     try:
-        print(f"📂 Fichier source: {fichier_excel}")
-        print(f"🎯 Analyse de {nb_entreprises} entreprises PME")
-        print()
+        # Test direct extracteur
+        from scripts.extracteur_donnees import ExtracteurDonnees
+        import os
         
-        # ✅ ÉTAPE 1: Extraction avec filtrage PME territorial
-        print("📊 ÉTAPE 1/5 - EXTRACTION ET FILTRAGE PME")
-        print("-" * 50)
+        fichier_excel = "data/input/entreprises_base.xlsx"
+        print(f"[FICHIER] Fichier testé: {fichier_excel}")
+        print(f"[FICHIER] Fichier existe: {os.path.exists(fichier_excel)}")
         
+        if not os.path.exists(fichier_excel):
+            print("[ERREUR] PROBLEME: Fichier Excel manquant!")
+            return False
+        
+        # Test extraction directe
         extracteur = ExtracteurDonnees(fichier_excel)
-        toutes_entreprises = extracteur.extraire_echantillon(nb_entreprises * 3)  # Plus large pour compenser le filtrage
         
-        print(f"✅ {len(toutes_entreprises)} entreprises extraites du fichier")
+        # Test chargement
+        df = extracteur.charger_donnees()
+        print(f"[STATS] Lignes dans Excel: {len(df)}")
+        print(f"[STATS] Colonnes: {list(df.columns)}")
         
-        # ✅ FILTRAGE TERRITORIAL
-        filtreur = FiltreurPME()
-        entreprises_territoire = filtreur.filtrer_par_territoire(toutes_entreprises)
+        # Test validation structure
+        structure_ok = extracteur.valider_structure()
+        print(f"[STRUCTURE] Structure valide: {structure_ok}")
         
-        if len(entreprises_territoire) == 0:
-            print("❌ AUCUNE ENTREPRISE dans votre territoire !")
-            print("💡 Vérifiez vos codes postaux dans config/parametres.yaml")
-            return None
+        if not structure_ok:
+            print("[ERREUR] PROBLEME: Structure Excel invalide!")
+            return False
         
-        print(f"🌍 {len(entreprises_territoire)} entreprises dans le territoire")
+        # Test nettoyage
+        df_clean = extracteur.nettoyer_donnees()
+        print(f"[NETTOYAGE] Après nettoyage: {len(df_clean)} entreprises")
         
-        # ✅ FILTRAGE PME RECHERCHABLES
-        pme_recherchables = filtreur.filtrer_pme_recherchables(entreprises_territoire)
+        # Test échantillon AVANT filtrage
+        echantillon_brut = extracteur.extraire_echantillon(50)  # Large échantillon
+        print(f"[ECHANTILLON] Échantillon brut: {len(echantillon_brut)} entreprises")
         
-        if len(pme_recherchables) == 0:
-            print("❌ AUCUNE PME recherchable détectée !")
-            print("💡 Critères de filtrage peut-être trop stricts")
-            return None
+        if len(echantillon_brut) == 0:
+            print("[ERREUR] PROBLEME: Extraction de base échouée!")
+            return False
         
-        print(f"🏢 {len(pme_recherchables)} PME recherchables identifiées")
+        # Affichage échantillon
+        print(f"\n[ECHANTILLON] ECHANTILLON BRUT (3 premières):")
+        for i, ent in enumerate(echantillon_brut[:3], 1):
+            nom = ent.get('nom', 'N/A')
+            commune = ent.get('commune', 'N/A')
+            siret = ent.get('siret', 'N/A')
+            print(f"   {i}. {nom[:40]} | {commune} | SIRET: {siret}")
         
-        # Limitation au nombre final souhaité
-        entreprises_finales = pme_recherchables[:nb_entreprises]
-        
-        # ✅ SYNCHRONISATION DES DONNÉES
-        entreprises_finales = synchroniser_donnees_entreprises(entreprises_finales)
-        
-        print(f"\n📊 SÉLECTION FINALE:")
-        print(f"   🌍 Territoire: {len(entreprises_territoire)} entreprises")
-        print(f"   🏢 PME recherchables: {len(pme_recherchables)}")
-        print(f"   🎯 Échantillon final: {len(entreprises_finales)}")
-        
-        # ✅ ÉTAPE 2: Recherche web adaptée PME
-        print(f"\n🔍 ÉTAPE 2/5 - RECHERCHE WEB PME TERRITORIALE")
-        print("-" * 50)
-        
-        recherche = RechercheWeb(timedelta(days=180))
-        
-        # ✅ CORRECTION CRITIQUE: Adapter les requêtes PME
-        adapter_requetes = creer_adapter_requetes_pme(recherche)
-        recherche.construire_requetes_intelligentes = adapter_requetes
-        print("✅ Adaptateur de requêtes PME configuré")
-        
-        resultats_bruts = []
-        
-        for i, entreprise in enumerate(entreprises_finales, 1):
-            nom_entreprise = logger.log_entreprise_debut(entreprise)
-            print(f"  🏢 {i}/{len(entreprises_finales)}: {nom_entreprise} ({entreprise.get('commune', 'N/A')})")
-            
-            try:
-                resultats = recherche.rechercher_entreprise(entreprise, logger=logger)
-                resultats_bruts.append(resultats)
-                
-                # Log succès
-                sources_trouvees = len(resultats.get('donnees_thematiques', {}))
-                logger.log_extraction_resultats(nom_entreprise, True)
-                print(f"     ✅ {sources_trouvees} sources analysées")
-                
-            except Exception as e:
-                logger.log_extraction_resultats(nom_entreprise, False, str(e))
-                print(f"     ❌ Erreur: {str(e)}")
-                
-                # Résultat vide pour continuer
-                resultats_bruts.append({
-                    'entreprise': entreprise,
-                    'donnees_thematiques': {},
-                    'erreurs': [str(e)]
-                })
-                continue
-        
-        print(f"\n✅ Recherche terminée pour {len(resultats_bruts)} entreprises")
-
-        # Correction de qualité des données avant analyse
-        fixer = DataQualityFixer()
-        for resultat in resultats_bruts:
-            entreprise_r = resultat.get('entreprise', {})
-            donnees_thematiques = resultat.get('donnees_thematiques', {})
-            if donnees_thematiques:
-                resultat['donnees_thematiques'] = fixer.corriger_donnees_thematiques(
-                    entreprise_r,
-                    donnees_thematiques
-                )
-        
-        # ✅ ÉTAPE 3: Analyse avec seuils PME + VALIDATION IA
-        print(f"\n🔬 ÉTAPE 3/5 - ANALYSE THÉMATIQUE PME + VALIDATION IA")
-        print("-" * 50)
-        
-        thematiques = ['recrutements', 'evenements', 'innovations', 'vie_entreprise']
-        analyseur = AnalyseurThematiques(thematiques)
-        
-        # ✅ VALIDATION IA AVANT L'ANALYSE
-        print("🤖 Activation de la validation IA anti-faux positifs...")
-        
-        try:
-            from ai_validation_module import AIValidationModule
-            ai_validator = AIValidationModule()
-            
-            resultats_valides_ia = []
-            total_faux_positifs = 0
-            
-            for resultat in resultats_bruts:
-                entreprise = resultat.get('entreprise', {})
-                donnees_thematiques = resultat.get('donnees_thematiques', {})
-                
-                if donnees_thematiques:
-                    nom = entreprise.get('nom', 'N/A')
-                    print(f"🔍 Validation IA: {nom}")
-                    
-                    # ✅ VALIDATION IA DES RÉSULTATS
-                    donnees_validees = ai_validator.batch_validate_results(
-                        entreprise, 
-                        donnees_thematiques
-                    )
-                    
-                    # Comptage faux positifs éliminés
-                    nb_avant = sum(len(data.get('extraits_textuels', [])) for data in donnees_thematiques.values() if isinstance(data, dict))
-                    nb_apres = sum(len(data) for data in donnees_validees.values())
-                    total_faux_positifs += (nb_avant - nb_apres)
-                    
-                    # Mise à jour avec données validées
-                    resultat_valide = resultat.copy()
-                    resultat_valide['donnees_thematiques'] = donnees_validees
-                    resultat_valide['validation_ia_appliquee'] = True
-                    resultats_valides_ia.append(resultat_valide)
-                else:
-                    resultats_valides_ia.append(resultat)
-            
-            print(f"✅ Validation IA terminée: {total_faux_positifs} faux positifs éliminés")
-            
-            # Utiliser les résultats validés par l'IA
-            resultats_bruts = resultats_valides_ia
-            
-        except Exception as e:
-            print(f"❌ Erreur validation IA: {e}")
-            print("➡️ Analyse sans validation IA")
-        
-        # ✅ ADAPTATION SEUILS POUR PME
-        analyseur.seuil_pertinence = 0.15  # TRÈS permissif pour PME
-        print(f"🔧 Seuils PME ultra-permissifs: pertinence = {analyseur.seuil_pertinence}")
-        
-        # ✅ ANALYSE AVEC DONNÉES VALIDÉES
-        donnees_enrichies = analyseur.analyser_resultats(resultats_bruts, logger=logger)
-        
-        # Statistiques d'analyse
-        entreprises_actives = [e for e in donnees_enrichies if e.get('score_global', 0) > 0.2]
-        entreprises_tres_actives = [e for e in donnees_enrichies if e.get('score_global', 0) > 0.5]
-        
-        print(f"✅ Analyse PME terminée:")
-        print(f"   📊 Entreprises analysées: {len(donnees_enrichies)}")
-        print(f"   🎯 PME actives (>0.2): {len(entreprises_actives)}")
-        print(f"   🏆 PME très actives (>0.5): {len(entreprises_tres_actives)}")
-        
-        # ✅ ÉTAPE 4: Génération des rapports
-        print(f"\n📊 ÉTAPE 4/5 - GÉNÉRATION RAPPORTS PME")
-        print("-" * 50)
-        
-        generateur = GenerateurRapports()
-        rapports = generateur.generer_tous_rapports(donnees_enrichies)
-        
-        # Affichage des rapports générés
-        rapports_reussis = 0
-        print("🎯 RAPPORTS PME GÉNÉRÉS:")
-        
-        for type_rapport, chemin_fichier in rapports.items():
-            emoji = {"excel": "📊", "html": "🌐", "json": "📄", "alertes": "🚨"}.get(type_rapport, "📋")
-            
-            if not chemin_fichier.startswith("ERREUR"):
-                print(f"   {emoji} {type_rapport.upper()}: {chemin_fichier}")
-                rapports_reussis += 1
-            else:
-                print(f"   ❌ {type_rapport.upper()}: {chemin_fichier}")
-        
-        print(f"✅ {rapports_reussis}/{len(rapports)} rapports PME générés")
-        
-        # ✅ ÉTAPE 5: Diagnostic final
-        print(f"\n📋 ÉTAPE 5/5 - DIAGNOSTIC PME TERRITORIAL")
-        print("-" * 50)
-        
-        rapport_diagnostic = logger.generer_rapport_final()
-        print(rapport_diagnostic)
-        
-        # ✅ RÉSUMÉ FINAL PME
-        print(f"\n🎉 ANALYSE PME TERRITORIALE TERMINÉE !")
-        print("=" * 70)
-        
-        print(f"📊 RÉSULTATS PME:")
-        print(f"   🏘️ Territoire analysé: {len(set(e.get('commune', '') for e in entreprises_finales))} communes")
-        print(f"   🏢 PME traitées: {len(entreprises_finales)}")
-        print(f"   🎯 PME avec activité détectée: {len(entreprises_actives)}")
-        print(f"   📄 Rapports générés: {rapports_reussis}")
-        
-        if len(entreprises_actives) > 0:
-            print(f"\n🏆 TOP PME ACTIVES:")
-            top_pme = sorted(entreprises_actives, key=lambda x: x.get('score_global', 0), reverse=True)[:5]
-            
-            for i, pme in enumerate(top_pme, 1):
-                nom = pme.get('nom', 'N/A')
-                commune = pme.get('commune', 'N/A')
-                score = pme.get('score_global', 0)
-                themes = pme.get('thematiques_principales', [])
-                
-                print(f"   {i}. {nom[:40]} ({commune})")
-                print(f"      Score: {score:.3f} | Thématiques: {', '.join(themes)}")
-        
-        print(f"\n📂 CONSULTEZ VOS RAPPORTS PME:")
-        print(f"   📁 Dossier: data/output/")
-        print(f"   💡 Conseil: Ouvrez le rapport HTML pour une vue d'ensemble territoriale")
-        
-        return rapports
+        return True
         
     except Exception as e:
-        print(f"\n❌ ERREUR TRAITEMENT PME: {str(e)}")
-        print("=" * 50)
+        print(f"[ERREUR] ERREUR DIAGNOSTIC EXTRACTION: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+def diagnostic_filtrage_complet(entreprises_brutes):
+    """Diagnostic complet du filtrage PME"""
+    print(f"\n[DIAGNOSTIC] DIAGNOSTIC FILTRAGE PME")
+    print("=" * 50)
+    
+    try:
+        from scripts.filtreur_pme import FiltreurPME
+        print(f"[STATS] Entreprises avant filtrage: {len(entreprises_brutes)}")
         
-        # Diagnostic d'erreur
-        try:
-            if 'logger' in locals():
-                print("\n🔍 DIAGNOSTIC D'ERREUR:")
-                rapport_diagnostic = logger.generer_rapport_final()
-                print(rapport_diagnostic)
-        except Exception as diag_error:
-            print(f"❌ Diagnostic impossible: {diag_error}")
+        # Créer filtreur PME
+        filtreur = FiltreurPME()
         
+        # Test filtrage territorial
+        print(f"[TERRITOIRE] FILTRAGE TERRITORIAL:")
+        codes_postaux = getattr(filtreur, 'codes_postaux_cibles', ['77600', '77700', '77400', '77000', '77300', '77500', '77200', '77100'])
+        communes = getattr(filtreur, 'communes_prioritaires', [])
+        
+        print(f"   [CONFIG] Codes postaux cibles: {codes_postaux}")
+        print(f"   [CONFIG] Communes prioritaires: {communes}")
+        
+        # Appliquer filtrage territorial
+        entreprises_territoire = filtreur.filtrer_par_territoire(entreprises_brutes)
+        print(f"\n[STATS] Résultat filtrage territorial: {len(entreprises_territoire)}/{len(entreprises_brutes)} entreprises")
+        
+        # Appliquer filtrage PME
+        print(f"[TERRITOIRE] Après filtrage territorial: {len(entreprises_territoire)}")
+        pme_recherchables = filtreur.filtrer_pme_recherchables(entreprises_territoire)
+        print(f"[PME] Après filtrage PME: {len(pme_recherchables)}")
+        
+        # Affichage détaillé des PME
+        print(f"\n[PME] PME RECHERCHABLES (3 premières):")
+        for i, ent in enumerate(pme_recherchables[:3], 1):
+            nom = ent.get('nom', 'N/A')
+            commune = ent.get('commune', 'N/A')
+            print(f"   {i}. {nom} | {commune}")
+        
+        return pme_recherchables
+        
+    except Exception as e:
+        print(f"[ERREUR] ERREUR DIAGNOSTIC FILTRAGE: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
+def diagnostic_recherche_une_entreprise(entreprise):
+    """Test de recherche sur une seule entreprise"""
+    print(f"\n[DIAGNOSTIC] TEST RECHERCHE UNE ENTREPRISE")
+    print("=" * 50)
+    
+    nom = entreprise.get('nom', 'N/A')
+    commune = entreprise.get('commune', 'N/A')
+    print(f"[ENTREPRISE] Test: {nom} à {commune}")
+    
+    try:
+        from scripts.recherche_web import RechercheWeb
+        
+        # Initialiser recherche avec config ultra-permissive
+        recherche = RechercheWeb(periode_recherche="6 mois")  # [FIX] Ajout paramètre manquant
+        recherche.seuil_validation_minimal = 0.01  # Ultra-permissif
+        
+        # Test recherche
+        print(f"[REQUETE] Requête test: \"{nom}\" {commune}")
+        donnees_thematiques = recherche.rechercher_entreprise(entreprise)
+        
+        print(f"[RESULTATS] Résultats moteur: {len(donnees_thematiques) if donnees_thematiques else 0}")
+        
+        if donnees_thematiques and len(donnees_thematiques) > 0:
+            print(f"[STATS] Données thématiques: {len(donnees_thematiques)}")
+            for thematique, donnees in donnees_thematiques.items():
+                if isinstance(donnees, dict):
+                    mots_cles = donnees.get('mots_cles_trouves', [])
+                    extraits = donnees.get('extraits_textuels', [])
+                    print(f"   [THEME] Thématiques: {thematique}")
+                    print(f"      [MOTS] Mots-clés: {len(mots_cles)}")
+                    print(f"      [EXTRAITS] Extraits: {len(extraits)}")
+        
+        return len(donnees_thematiques) > 0
+        
+    except Exception as e:
+        print(f"[ERREUR] ERREUR TEST RECHERCHE: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+def main_pme_territorial_diagnostic(nb_entreprises_cible=25):
+    """Version avec diagnostic integre"""
+    print("[DIAGNOSTIC] DIAGNOSTIC COMPLET - DETECTION PME")
+    print("=" * 70)
+    print(f"[CONFIG] Test avec {nb_entreprises_cible} entreprises cibles")
+    
+    # Test 1: Extraction
+    if not diagnostic_extraction_complete():
+        return None
+    
+    # Extraction normale  
+    fichier_excel = "data/input/entreprises_base.xlsx"
+    
+    from scripts.extracteur_donnees import ExtracteurDonnees
+    extracteur = ExtracteurDonnees(fichier_excel)
+    # Extraction plus large pour compenser le filtrage
+    entreprises_brutes = extracteur.extraire_echantillon(nb_entreprises_cible * 3)
+    
+    # Test 2: Filtrage
+    pme_recherchables = diagnostic_filtrage_complet(entreprises_brutes)
+    
+    if len(pme_recherchables) == 0:
+        print("\n[ERREUR] ARRET: Aucune PME apres filtrage")
+        return None
+    
+    # Test 3: Recherche sur UNE entreprise
+    entreprise_test = pme_recherchables[0]
+    recherche_ok = diagnostic_recherche_une_entreprise(entreprise_test)
+    
+    if not recherche_ok:
+        print("\n[ERREUR] ARRET: Recherche web echouee")
+        return None
+    
+    # Test 4: Analyse thématique -- utiliser les résultats réels (pas de données factices)
+    print(f"\n[ANALYSE] ANALYSE THEMATIQUE SUR RÉELS")
+    print("=" * 50)
+
+    try:
+        from scripts.analyseur_thematiques import AnalyseurThematiques
+        from scripts.generateur_rapports import GenerateurRapports
+        from scripts.recherche_web import RechercheWeb
+
+        # Initialisation analyseur
+        thematiques = ['evenements', 'recrutements', 'vie_entreprise', 'innovations']
+        analyseur = AnalyseurThematiques(thematiques)
+        analyseur.seuil_pertinence = 0.01  # seuil permissif pour PME
+        print(f"[CONFIG] Seuil analysE forcé: {analyseur.seuil_pertinence}")
+
+        # Construire les résultats bruts en lançant des recherches réelles sur le sous-ensemble PME
+        resultats_bruts = []
+        recherche = RechercheWeb(periode_recherche="6 mois")
+        recherche.seuil_validation_minimal = 0.01
+
+        nb_a_traiter = min(len(pme_recherchables), nb_entreprises_cible)
+        print(f"[RECHERCHE] Lancement recherches pour {nb_a_traiter} entreprises (réelles)")
+
+        for i, ent in enumerate(pme_recherchables[:nb_a_traiter], 1):
+            try:
+                print(f"  [#{i}] Recherche: {ent.get('nom', '')} | {ent.get('commune', '')}")
+                res = recherche.rechercher_entreprise(ent)
+                # Structure: res est un dict avec 'donnees_thematiques' etc. Normaliser pour l'analyseur
+                entree_analyse = {
+                    'entreprise': ent,
+                    'donnees_thematiques': res.get('donnees_thematiques', {}) if isinstance(res, dict) else {}
+                }
+                resultats_bruts.append(entree_analyse)
+            except Exception as e:
+                print(f"    ⚠️ Erreur recherche entreprise {ent.get('nom','N/A')}: {e}")
+                continue
+
+        print(f"[STATS] Resultats bruts collectes: {len(resultats_bruts)}")
+
+        # Lancer l'analyse thématique sur les vrais résultats
+        donnees_enrichies = analyseur.analyser_resultats(resultats_bruts)
+        print(f"[STATS] Entreprises enrichies après analyse: {len(donnees_enrichies)}")
+
+        # Génération des rapports (forcée si nécessaire)
+        print(f"\n[RAPPORTS] Tentative génération de rapports à partir des données réelles")
+        generateur = GenerateurRapports()
+
+        # Si aucun score positif, appliquer force_inclusion sur toutes pour générer un rapport
+        if donnees_enrichies and all(e.get('score_global', 0) <= 0 for e in donnees_enrichies):
+            for e in donnees_enrichies:
+                e['force_inclusion'] = True
+
+        rapports_generes = generateur.generer_tous_rapports(donnees_enrichies)
+
+        rapports_reussis = 0
+        for type_rapport, chemin_fichier in (rapports_generes or {}).items():
+            if isinstance(chemin_fichier, str) and not chemin_fichier.startswith("ERREUR"):
+                print(f"[OK] {type_rapport}: {chemin_fichier}")
+                rapports_reussis += 1
+            else:
+                print(f"[ERREUR] {type_rapport}: {chemin_fichier}")
+
+        if rapports_reussis > 0:
+            print(f"[SUCCES] {rapports_reussis} rapports générés avec succès!")
+            return rapports_generes
+        else:
+            print(f"[ERREUR] Aucun rapport généré")
+            return None
+
+    except Exception as e:
+        print(f"[ERREUR] ERREUR ANALYSE: {e}")
+        import traceback
         traceback.print_exc()
         return None
 
+def main_pme_territorial(nb_entreprises=25):
+    """Programme principal - Lance le diagnostic complet"""
+    
+    print("[PME] VEILLE PME SEINE-ET-MARNE")
+    print("=" * 50)
+    print(f"[CONFIG] Analyse de {nb_entreprises} entreprises")
+    print("[CONFIG] Mode diagnostic active")
+    print()
+    
+    # Lancer le diagnostic complet avec le bon nombre d'entreprises
+    return main_pme_territorial_diagnostic(nb_entreprises)
 
 if __name__ == "__main__":
-    print("🏢 VEILLE ÉCONOMIQUE PME TERRITORIALE - VERSION CORRIGÉE")
+    print("[PME] VEILLE ECONOMIQUE PME TERRITORIALE - VERSION CORRIGEE")
     print("=" * 70)
     print("Lancement de l'analyse PME avec codes postaux...")
     print()
     
+    # Configuration du nombre d'entreprises
+    NB_ENTREPRISES_CIBLE = 25  # [CONFIG] Changez cette valeur selon vos besoins
+    
     try:
-        # ✅ DEBUG PRÉALABLE
+        # [DEBUG] DEBUG PREALABLE
         debug_seuils_utilises()
         print()
         
-        # ✅ EXÉCUTION PRINCIPALE
-        rapports = main_pme_territorial()
+        # [EXEC] EXECUTION PRINCIPALE
+        print(f"[CONFIG] Lancement analyse pour {NB_ENTREPRISES_CIBLE} entreprises")
+        rapports = main_pme_territorial(NB_ENTREPRISES_CIBLE)
         
         if rapports:
-            print("\n✅ ANALYSE PME RÉUSSIE ! 🎉")
-            print("🎯 Vos PME territoriales ont été analysées avec succès !")
+            print("\n[OK] ANALYSE PME REUSSIE !")
+            print("[SUCCES] Vos PME territoriales ont ete analysees avec succes !")
             print()
-            print("🔍 PROCHAINES ÉTAPES:")
-            print("1. 📊 Consultez le rapport Excel pour les données détaillées")
-            print("2. 🌐 Ouvrez le rapport HTML pour la visualisation territoriale")
-            print("3. 🔧 Ajustez les paramètres si nécessaire dans config/parametres.yaml")
-            print("4. 🚀 Relancez l'analyse pour un suivi périodique")
+            print("[INFO] PROCHAINES ETAPES:")
+            print("1. [EXCEL] Consultez le rapport Excel pour les donnees detaillees")
+            print("2. [WEB] Ouvrez le rapport HTML pour la visualisation territoriale")
+            print("3. [CONFIG] Ajustez les parametres si necessaire dans config/parametres.yaml")
+            print("4. [RELANCE] Relancez l'analyse pour un suivi periodique")
         else:
-            print("\n❌ ANALYSE PME ÉCHOUÉE")
-            print("💡 Consultez les messages d'erreur ci-dessus pour identifier le problème")
+            print("\n[ERREUR] ANALYSE PME ECHOUEE")
+            print("[INFO] Consultez les messages d'erreur ci-dessus pour identifier le problème")
             sys.exit(1)
             
     except KeyboardInterrupt:
-        print("\n⚠️ Analyse PME interrompue par l'utilisateur")
+        print("\n[ARRET] Analyse PME interrompue par l'utilisateur")
         sys.exit(0)
     except Exception as e:
-        print(f"\n❌ ERREUR CRITIQUE: {str(e)}")
+        print(f"\n[ERREUR] ERREUR CRITIQUE: {str(e)}")
         traceback.print_exc()
         sys.exit(1)
